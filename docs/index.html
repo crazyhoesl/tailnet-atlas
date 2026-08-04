@@ -1,0 +1,761 @@
+<meta charset="utf-8">
+<title>Tailnet Atlas — orion</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Cg fill='%232c3a52'%3E%3Ccircle cx='18' cy='18' r='6'/%3E%3Ccircle cx='32' cy='18' r='6'/%3E%3Ccircle cx='46' cy='18' r='6'/%3E%3Ccircle cx='18' cy='46' r='6'/%3E%3Ccircle cx='32' cy='46' r='6'/%3E%3Ccircle cx='46' cy='46' r='6'/%3E%3C/g%3E%3Cg fill='%234de0e6'%3E%3Ccircle cx='18' cy='32' r='6'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3Ccircle cx='46' cy='32' r='6'/%3E%3C/g%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#060a12; --surface:#0d141f; --surface-2:#111b28;
+    --ink:#e9eef8; --muted:#96a4bc; --faint:#5d6c82; --line:#1b2534; --line-2:#2a3849;
+    --accent:#4de0e6; --accent-2:#6f8dff; --warm:#f6b23c; --crit:#ff6b81; --ok:#3ddc97;
+    --h-server:#5b8cf0; --h-exit:#b28bfa; --h-subnet:#2dd4bf; --h-full:#f6b23c;
+    --h-client:#8592a8; --h-home:#ffd166; --h-proxy:#4de0e6;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --glow:0 0 0 1px var(--line),0 24px 60px -30px rgba(0,0,0,.8);
+  }
+  @media (prefers-color-scheme:light){:root:not([data-theme=dark]){
+    --bg:#eaeef4; --surface:#fff; --surface-2:#f4f7fb;
+    --ink:#0d1520; --muted:#51617a; --faint:#8b99ac; --line:#e0e7f0; --line-2:#cdd8e6;
+    --accent:#0f97ab; --accent-2:#2f5bd0; --warm:#b9770f; --crit:#d23a54; --ok:#0f9d68;
+    --h-server:#2f6ae0; --h-exit:#7c4fe0; --h-subnet:#0e9d8d; --h-full:#bd7a0d;
+    --h-client:#6a768b; --h-home:#c1890a; --h-proxy:#0f97ab;
+    --glow:0 1px 2px rgba(15,23,42,.06),0 20px 44px -28px rgba(15,23,42,.3);
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1240px;margin:0 auto;padding:26px 22px 80px}
+
+  .head{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:11px;font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:beat 2.6s infinite}
+  @keyframes beat{0%{box-shadow:0 0 0 0 rgba(61,220,151,.5)}70%{box-shadow:0 0 0 9px rgba(61,220,151,0)}100%{box-shadow:0 0 0 0 rgba(61,220,151,0)}}
+  h1{font-size:clamp(26px,4vw,40px);margin:6px 0 4px;letter-spacing:-.02em;font-weight:650}
+  .grad{background:linear-gradient(96deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{color:var(--muted);max-width:56ch;margin:0}
+  .kpis{display:flex;gap:22px;margin-left:auto;flex-wrap:wrap}
+  .kpi b{display:block;font-size:26px;font-family:var(--mono);letter-spacing:-.02em}
+  .kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+
+  .stagewrap{position:relative;margin-bottom:12px}
+  .stage{position:relative;height:min(72vh,700px);min-height:460px;border-radius:18px;
+    background:linear-gradient(180deg,var(--surface),var(--surface-2));
+    box-shadow:var(--glow);overflow:hidden}
+  canvas{display:block;width:100%;height:100%}
+  .stamp{position:absolute;left:14px;top:12px;font:11px/1 var(--mono);color:var(--faint);
+    letter-spacing:.08em;pointer-events:none}
+  .hint{position:absolute;right:14px;top:12px;font:11px/1 var(--mono);color:var(--faint);
+    pointer-events:none}
+  .live{margin-left:7px;color:var(--ok)}
+  .live::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+    background:var(--ok);margin-right:5px;vertical-align:middle;animation:beat 2.6s infinite}
+  .live.idle,.live.warn{color:var(--faint)}
+  .live.idle::before{background:var(--faint);animation:none}
+  .live.warn{color:var(--crit)}
+  .live.warn::before{background:var(--crit);animation:none}
+  .legend{position:absolute;left:14px;bottom:12px;display:flex;gap:7px;flex-wrap:wrap;
+    max-width:calc(100% - 28px)}
+  .lg{display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;
+    background:rgba(127,140,170,.13);font-size:11px;color:var(--muted);cursor:pointer;
+    user-select:none;border:1px solid transparent;transition:.15s}
+  .lg:hover{border-color:var(--line-2);color:var(--ink)}
+  .lg.off{opacity:.32}
+  .lg i{width:8px;height:8px;border-radius:2px;display:block}
+  .tip{position:absolute;pointer-events:none;z-index:5;min-width:200px;padding:11px 13px;
+    border-radius:12px;background:rgba(10,16,26,.95);border:1px solid var(--line-2);
+    box-shadow:0 18px 40px -18px rgba(0,0,0,.9);opacity:0;transform:translateY(4px);
+    transition:opacity .13s,transform .13s;font-size:12px}
+  @media (prefers-color-scheme:light){:root:not([data-theme=dark]) .tip{background:rgba(255,255,255,.97)}}
+  .tip.on{opacity:1;transform:none}
+  .tip h4{margin:0 0 7px;font-size:13.5px;display:flex;align-items:center;gap:7px}
+  .tip .r{display:flex;justify-content:space-between;gap:16px;color:var(--muted);
+    font-family:var(--mono);font-size:11px;padding:1.5px 0}
+  .tip .r b{color:var(--ink);font-weight:500}
+  .tip .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+
+  section{margin-top:40px}
+  .sec{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .idx{font:11px var(--mono);color:var(--accent);letter-spacing:.14em}
+  h2{font-size:19px;margin:0;font-weight:620}
+  .sec p{margin:0;color:var(--muted);font-size:13px}
+  .panel{background:var(--surface);border-radius:14px;box-shadow:var(--glow);overflow-x:auto}
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--faint);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line);
+    white-space:nowrap}
+  .tbl td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tbody tr{transition:background .12s}
+  .tbl tbody tr:hover{background:rgba(127,140,170,.07)}
+  .name{font-weight:560;white-space:nowrap}
+  .ip{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .note{font-size:11px;color:var(--faint)}
+  .note.nw{white-space:nowrap}
+  .chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .chip{font:11px/1.5 var(--mono);padding:2px 8px;border-radius:999px;
+    background:rgba(127,140,170,.16);color:var(--muted);white-space:nowrap}
+  .chip.server{background:color-mix(in srgb,var(--h-server) 20%,transparent);color:var(--h-server)}
+  .chip.exit{background:color-mix(in srgb,var(--h-exit) 20%,transparent);color:var(--h-exit)}
+  .chip.subnet{background:color-mix(in srgb,var(--h-subnet) 20%,transparent);color:var(--h-subnet)}
+  .chip.full{background:color-mix(in srgb,var(--h-full) 20%,transparent);color:var(--h-full)}
+  .chip.client{background:color-mix(in srgb,var(--h-client) 22%,transparent);color:var(--h-client)}
+  .chip.home{background:color-mix(in srgb,var(--h-home) 20%,transparent);color:var(--h-home)}
+  .chip.proxy,.chip.ha-access{background:color-mix(in srgb,var(--h-proxy) 20%,transparent);color:var(--h-proxy)}
+  .port{font:11px var(--mono);padding:2px 7px;border-radius:6px;
+    background:rgba(109,141,255,.16);color:var(--accent-2)}
+  .port.all{background:rgba(246,178,60,.16);color:var(--warm)}
+  .flow{font-family:var(--mono);font-size:12px}
+  .to{color:var(--faint);padding:0 3px}
+  .off{color:var(--crit);font-size:11px;font-family:var(--mono)}
+  .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+    color:var(--faint);font-size:12px;display:flex;gap:18px;flex-wrap:wrap}
+  .foot code{font-family:var(--mono);color:var(--muted)}
+  /* --- narrow screens -------------------------------------------------
+     The map needs a taller, less cramped box; the legend moves below it
+     instead of covering nodes; the hint line is dropped because it and the
+     timestamp are both pinned to the top row and collided. */
+  @media (max-width:720px){
+    .wrap{padding:18px 14px 60px}
+    .kpis{margin-left:0;gap:10px 0;width:100%;display:grid;
+      grid-template-columns:repeat(3,1fr)}
+    .kpi b{font-size:21px}
+    .kpi span{font-size:9.5px;letter-spacing:.06em}
+    .head{gap:14px}
+    .lede{font-size:14px}
+    /* taller than the viewport on purpose: stacked regions only become
+       readable when each circle can use the full width */
+    .stage{height:min(132vh,1060px);min-height:720px}
+    .hint{display:none}
+    .legend{position:static;margin-top:9px;max-width:none;gap:6px}
+    .lg{font-size:10.5px;padding:3px 8px}
+    .stamp{position:static;margin-top:8px;font-size:10px}
+    section{margin-top:30px}
+    h2{font-size:17px}
+    .tbl{font-size:12.5px}
+    .tbl th,.tbl td{padding:8px 11px}
+    /* The tables scroll sideways here. Without this the chip cells wrap inside
+       their (off-screen) column and blow the row height up, which reads as a
+       stack of tall empty rows in the part you can actually see. */
+    .chips,.tip .tags{flex-wrap:nowrap}
+    .panel{-webkit-overflow-scrolling:touch}
+    .foot{gap:10px}
+  }
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <div class="brand"><span class="dot"></span> Tailnet orion · tin-otter.ts.net</div>
+      <h1>Access as <span class="grad">Geography</span></h1>
+      <p class="lede">Devices grouped by where they physically sit. Lines are grants —
+        directed: the source initiates, the target never answers back.</p>
+      <p class="lede" style="margin-top:10px;padding:9px 12px;border-left:2px solid var(--accent);background:rgba(127,140,170,.09);border-radius:0 8px 8px 0;font-size:13px"><b>This is a demo.</b> Every device, user, site and network below is invented — but it is rendered by the real code, not mocked up. Source and setup: <a href="https://github.com/crazyhoesl/tailnet-atlas" style="color:var(--accent)">github.com/crazyhoesl/tailnet-atlas</a></p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b id="k-devices">23</b><span>devices</span></div>
+      <div class="kpi"><b id="k-online">20</b><span>online</span></div>
+      <div class="kpi"><b id="k-grants">4</b><span>grants</span></div>
+      <div class="kpi"><b id="k-sites">4</b><span>sites</span></div>
+      <div class="kpi"><b id="k-users">4</b><span>owners</span></div>
+    </div>
+  </div>
+
+  <div class="stagewrap">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="hint">hover a node · click to pin · click a role to filter</div>
+      <div class="tip" id="tip"></div>
+    </div>
+    <!-- outside .stage so they can drop below the map on narrow screens instead
+         of covering it; on desktop they are absolutely placed back over it -->
+    <div class="legend" id="legend"></div>
+    <div class="stamp"><span id="stamp">atlas.live · 04 Aug 2026 · 15:19:47</span><span id="live" class="live"></span></div>
+  </div>
+
+  <section>
+    <div class="sec"><span class="idx">01</span><h2>Devices</h2>
+      <p>23 nodes. Placement follows the address a device was last given by the
+        network it joined — for the travel routers that is their uplink, not the LAN they serve.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Device</th><th>Tailscale IP</th><th>Local · site</th><th>OS</th><th>Roles</th></tr></thead>
+      <tbody id="tb-devices"><tr><td class="name">atlas</td><td class="ip">100.82.62.24</td><td class="ip">172.25.0.3 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">backups</td><td class="ip">100.81.53.21</td><td class="ip">172.22.0.2 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">cloud-exit</td><td class="ip">100.82.77.29</td><td class="ip">10.0.19.7 <span class="note">·mobile</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip exit">exit</span><span class="note">update available</span></div></td></tr>
+<tr><td class="name">crate</td><td class="ip">100.80.14.8</td><td class="ip">192.168.10.30 <span class="note">·lisbon</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">doorbell-relay</td><td class="ip">100.82.59.23</td><td class="ip">172.24.0.3 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip ha-access">ha-access</span></div></td></tr>
+<tr><td class="name">hub</td><td class="ip">100.80.11.7</td><td class="ip">192.168.10.20 <span class="note">·lisbon</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip exit">exit</span><span class="chip home">home</span><span class="chip server">server</span><span class="chip subnet">subnet</span><span class="note">192.168.10.0/24</span></div></td></tr>
+<tr><td class="name">kitchen-tablet <span class="off">offline</span></td><td class="ip">100.80.26.12</td><td class="ip">192.168.10.52 <span class="note">·lisbon</span></td><td class="ip">android</td><td><div class="chips"><span class="chip client">client</span><span class="chip ha-access">ha-access</span></div></td></tr>
+<tr><td class="name">living-room-tv</td><td class="ip">100.80.23.11</td><td class="ip">192.168.10.51 <span class="note">·lisbon</span></td><td class="ip">android</td><td><div class="chips"><span class="chip client">client</span><span class="note">update available</span></div></td></tr>
+<tr><td class="name">metrics</td><td class="ip">100.81.50.20</td><td class="ip">172.21.0.2 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span><span class="note">update available</span></div></td></tr>
+<tr><td class="name">mila-ipad <span class="off">offline</span></td><td class="ip">100.82.74.28</td><td class="ip">172.20.10.4 <span class="note">·mobile</span></td><td class="ip">ios</td><td><div class="chips"><span class="chip client">client</span><span class="chip ha-access">ha-access</span><span class="note">user: mila</span></div></td></tr>
+<tr><td class="name">mila-laptop</td><td class="ip">100.81.41.17</td><td class="ip">10.20.30.44 <span class="note">·berlin</span></td><td class="ip">windows</td><td><div class="chips"><span class="chip full">client-full</span><span class="note">user: mila</span></div></td></tr>
+<tr><td class="name">nadia-pixel</td><td class="ip">100.80.20.10</td><td class="ip">192.168.10.42 <span class="note">·lisbon</span></td><td class="ip">android</td><td><div class="chips"><span class="chip full">client-full</span></div></td></tr>
+<tr><td class="name">notes</td><td class="ip">100.81.47.19</td><td class="ip">172.19.0.3 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">office-nuc</td><td class="ip">100.81.35.15</td><td class="ip">10.20.30.2 <span class="note">·berlin</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip exit">exit</span><span class="chip server">server</span><span class="chip subnet">subnet</span><span class="note">10.20.30.0/24</span><span class="note">user: mila</span></div></td></tr>
+<tr><td class="name">photos</td><td class="ip">100.81.44.18</td><td class="ip">172.19.0.2 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">plotter</td><td class="ip">100.81.38.16</td><td class="ip">10.20.30.31 <span class="note">·berlin</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip client">client</span><span class="note">user: mila</span></div></td></tr>
+<tr><td class="name">recipes</td><td class="ip">100.81.56.22</td><td class="ip">172.23.0.2 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip ha-access">ha-access</span><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">theo-iphone</td><td class="ip">100.80.29.13</td><td class="ip">192.168.10.53 <span class="note">·lisbon</span></td><td class="ip">ios</td><td><div class="chips"><span class="chip client">client</span><span class="chip ha-access">ha-access</span><span class="note">user: theo</span></div></td></tr>
+<tr><td class="name">theo-macbook</td><td class="ip">100.80.32.14</td><td class="ip">192.168.10.54 <span class="note">·lisbon</span></td><td class="ip">macos</td><td><div class="chips"><span class="chip full">client-full</span><span class="note">user: theo</span></div></td></tr>
+<tr><td class="name">thinkpad-x1</td><td class="ip">100.80.17.9</td><td class="ip">192.168.10.41 <span class="note">·lisbon</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip full">client-full</span></div></td></tr>
+<tr><td class="name">trip-router <span class="off">offline</span></td><td class="ip">100.82.71.27</td><td class="ip">172.20.10.6 <span class="note">·mobile</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip exit">exit</span><span class="chip server">server</span><span class="chip subnet">subnet</span><span class="note">192.168.9.0/24</span></div></td></tr>
+<tr><td class="name">van-router</td><td class="ip">100.82.68.26</td><td class="ip">10.44.2.87 <span class="note">·mobile</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip exit">exit</span><span class="chip server">server</span><span class="chip subnet">subnet</span><span class="note">192.168.8.0/24</span></div></td></tr>
+<tr><td class="name">wiki</td><td class="ip">100.82.65.25</td><td class="ip">172.26.0.2 <span class="note">·dock</span></td><td class="ip">linux</td><td><div class="chips"><span class="chip server">server</span></div></td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">02</span><h2>Grants</h2>
+      <p>Directed rules from the live policy file. Anything not listed here is denied.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>#</th><th>Source</th><th>Target</th><th>Ports</th><th>Edges drawn</th></tr></thead>
+      <tbody id="tb-grants"><tr><td class="ip">1</td><td><span class="chip full">client-full</span></td><td class="flow"><span class="chip server">server</span> <span class="to">·</span> <span class="chip home">home</span></td><td><span class="port all">any</span></td><td class="ip">48</td></tr>
+<tr><td class="ip">2</td><td><span class="chip client">client</span></td><td class="flow"><span class="chip home">home</span></td><td><span class="port">443</span> <span class="port">8123</span></td><td class="ip">5</td></tr>
+<tr><td class="ip">3</td><td><span class="chip ha-access">ha-access</span></td><td class="flow"><span class="chip home">home</span></td><td><span class="port">8123</span></td><td class="ip">5</td></tr>
+<tr><td class="ip">4</td><td><span class="chip server">server</span></td><td class="flow"><span class="chip home">home</span></td><td><span class="port">514</span></td><td class="ip">11</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">03</span><h2>Sites</h2>
+      <p>Physical grouping. Containers share their host's uplink, so they form their own cluster.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Site</th><th>Network</th><th>Devices</th><th>Roles present</th></tr></thead>
+      <tbody id="tb-sites"><tr><td class="name">Lisbon · home</td><td class="ip">192.168.10.0/24</td><td class="ip">8</td><td><div class="chips"><span class="chip client">client</span><span class="chip full">full</span><span class="chip home">home</span><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">Berlin · office</td><td class="ip">10.20.30.0/24</td><td class="ip">3</td><td><div class="chips"><span class="chip client">client</span><span class="chip full">full</span><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">Mobile · roaming</td><td class="ip">phones · travel routers</td><td class="ip">4</td><td><div class="chips"><span class="chip client">client</span><span class="chip exit">exit</span><span class="chip server">server</span></div></td></tr>
+<tr><td class="name">Docker @ crate</td><td class="ip">172.16/12 bridges</td><td class="ip">8</td><td><div class="chips"><span class="chip proxy">proxy</span><span class="chip server">server</span></div></td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">04</span><h2>Owners</h2>
+      <p>Who a device belongs to. Access itself is granted by tag, never by person —
+        ownership decides who can remove or re-authorise a node. On the map a device
+        owned by someone else carries a solid outer ring, one owned by its tag a
+        dashed one; unmarked nodes belong to the tailnet owner.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Owner</th><th>Role</th><th>Online</th><th>Sites</th><th>Devices</th></tr></thead>
+      <tbody id="tb-users"><tr><td><span class="name">nadia</span><div class="note">nadia@github</div></td><td><span class="chip home">owner</span></td><td class="ip">12/14</td><td class="note nw">Docker @ crate<br>Lisbon · home<br>Mobile · roaming</td><td><div class="chips"><span class="chip">backups</span> <span class="chip">cloud-exit</span> <span class="chip">crate</span> <span class="chip">hub</span> <span class="chip">kitchen-tablet</span> <span class="chip">living-room-tv</span> <span class="chip">metrics</span> <span class="chip">nadia-pixel</span> <span class="chip">notes</span> <span class="chip">photos</span> <span class="chip">thinkpad-x1</span> <span class="chip">trip-router</span> <span class="chip">van-router</span> <span class="chip">wiki</span></div></td></tr>
+<tr><td><span class="name">mila</span><div class="note">mila@github</div></td><td><span class="chip client">member</span></td><td class="ip">3/4</td><td class="note nw">Berlin · office<br>Mobile · roaming</td><td><div class="chips"><span class="chip">mila-ipad</span> <span class="chip">mila-laptop</span> <span class="chip">office-nuc</span> <span class="chip">plotter</span></div></td></tr>
+<tr><td><span class="name">theo</span><div class="note">theo@github</div></td><td><span class="chip client">member</span></td><td class="ip">2/2</td><td class="note nw">Lisbon · home</td><td><div class="chips"><span class="chip">theo-iphone</span> <span class="chip">theo-macbook</span></div></td></tr>
+<tr><td><span class="name">tag-owned</span></td><td><span class="chip client">tag-owned</span></td><td class="ip">3/3</td><td class="note nw">Docker @ crate</td><td><div class="chips"><span class="chip">atlas</span> <span class="chip">doorbell-relay</span> <span class="chip">recipes</span></div></td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">05</span><h2>How placement works</h2>
+      <p>Nothing here is hand-assigned — every device is re-located on each refresh.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Step</th><th>Rule</th><th>Why</th></tr></thead>
+      <tbody><tr><td class="name">1. Collect</td><td>Take every private address the device was last seen on (<span class="ip">10.x</span>, <span class="ip">172.16-31.x</span>, <span class="ip">192.168.x</span>).</td><td class="note">Tailscale reports all interfaces, not just the useful one.</td></tr>
+<tr><td class="name">2. Drop self-hosted</td><td>Ignore any address ending in <span class="ip">.1</span> — the gateway of a network the device hands out itself.</td><td class="note">Travel routers carry their own LAN everywhere; it says nothing about location. Same for Docker bridges.</td></tr>
+<tr><td class="name">3. Match a place</td><td><span class="ip">192.168.10.x</span> &rarr; Lisbon · home<br><span class="ip">10.20.30.x</span> &rarr; Berlin · office<br><span class="ip">172.20.10.x</span> &rarr; Mobile · roaming</td><td class="note">Only networks bound to a physical location count. The hotspot range is listed so it is not mistaken for a Docker bridge — both sit inside 172.16/12.</td></tr>
+<tr><td class="name">4. Docker</td><td>Anything left inside <span class="ip">172.16/12</span> joins the Docker @ crate cluster.</td><td class="note">Containers share the host's netns and have no LAN of their own.</td></tr>
+<tr><td class="name">5. Otherwise</td><td>Mobile · roaming.</td><td class="note">Mobile data, a hotspot or an unknown network — the device is not at any known site.</td></tr>
+<tr><td class="name">6. Pinned</td><td><span class="name">cloud-exit</span> always counts as roaming.</td><td class="note">A datacenter VM has no LAN that would place it anywhere meaningful.</td></tr></tbody>
+    </table></div>
+    <p class="note" style="margin:12px 2px 0">Rules are rendered from the same constants the placement code uses, so this table cannot fall out of sync. A device that is offline keeps its last known address, and therefore its last known site, until it checks in again.</p>
+  </section>
+
+  <div class="foot">
+    <span>Built live from the Tailscale API · background refresh every <code>5 min</code></span>
+    <span>While this page is open it polls every <code>10s</code>, for up to <code>5 min</code> of viewing time</span>
+    <span>Read-only · status at <code>/healthz</code></span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var NODES = [{"id": "atlas", "name": "atlas", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.82.62.24", "lan": "172.25.0.3", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "__tagged__", "ownerKind": "tag", "tags": ["tag:server"], "routes": [], "online": true}, {"id": "backups", "name": "backups", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.81.53.21", "lan": "172.22.0.2", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:server"], "routes": [], "online": true}, {"id": "cloudexit", "name": "cloud-exit", "role": "exit", "site": "mobile", "siteLabel": "Mobile · roaming", "ip": "100.82.77.29", "lan": "10.0.19.7", "lanKind": "lan", "loc": "mobile", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:exit"], "routes": [], "online": true}, {"id": "crate", "name": "crate", "role": "server", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.14.8", "lan": "192.168.10.30", "lanKind": "lan", "loc": "lisbon", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:server"], "routes": [], "online": true}, {"id": "doorbellre", "name": "doorbell-relay", "role": "proxy", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.82.59.23", "lan": "172.24.0.3", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "__tagged__", "ownerKind": "tag", "tags": ["tag:ha-access"], "routes": [], "online": true}, {"id": "hub", "name": "hub", "role": "home", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.11.7", "lan": "192.168.10.20", "lanKind": "lan", "loc": "lisbon", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:home", "tag:server", "tag:exit", "tag:subnet"], "routes": ["192.168.10.0/24"], "online": true}, {"id": "kitchentab", "name": "kitchen-tablet", "role": "client", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.26.12", "lan": "192.168.10.52", "lanKind": "lan", "loc": "lisbon", "os": "android", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:client", "tag:ha-access"], "routes": [], "online": false}, {"id": "livingroom", "name": "living-room-tv", "role": "client", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.23.11", "lan": "192.168.10.51", "lanKind": "lan", "loc": "lisbon", "os": "android", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:client"], "routes": [], "online": true}, {"id": "metrics", "name": "metrics", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.81.50.20", "lan": "172.21.0.2", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:server"], "routes": [], "online": true}, {"id": "milaipad", "name": "mila-ipad", "role": "client", "site": "mobile", "siteLabel": "Mobile · roaming", "ip": "100.82.74.28", "lan": "172.20.10.4", "lanKind": "lan", "loc": "mobile", "os": "ios", "owner": "mila@github", "ownerKind": "other", "tags": ["tag:client", "tag:ha-access"], "routes": [], "online": false}, {"id": "milalaptop", "name": "mila-laptop", "role": "full", "site": "berlin", "siteLabel": "Berlin · office", "ip": "100.81.41.17", "lan": "10.20.30.44", "lanKind": "lan", "loc": "berlin", "os": "windows", "owner": "mila@github", "ownerKind": "other", "tags": ["tag:client-full"], "routes": [], "online": true}, {"id": "nadiapixel", "name": "nadia-pixel", "role": "full", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.20.10", "lan": "192.168.10.42", "lanKind": "lan", "loc": "lisbon", "os": "android", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:client-full"], "routes": [], "online": true}, {"id": "notes", "name": "notes", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.81.47.19", "lan": "172.19.0.3", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:server"], "routes": [], "online": true}, {"id": "officenuc", "name": "office-nuc", "role": "server", "site": "berlin", "siteLabel": "Berlin · office", "ip": "100.81.35.15", "lan": "10.20.30.2", "lanKind": "lan", "loc": "berlin", "os": "linux", "owner": "mila@github", "ownerKind": "other", "tags": ["tag:server", "tag:subnet", "tag:exit"], "routes": ["10.20.30.0/24"], "online": true}, {"id": "photos", "name": "photos", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.81.44.18", "lan": "172.19.0.2", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:server"], "routes": [], "online": true}, {"id": "plotter", "name": "plotter", "role": "client", "site": "berlin", "siteLabel": "Berlin · office", "ip": "100.81.38.16", "lan": "10.20.30.31", "lanKind": "lan", "loc": "berlin", "os": "linux", "owner": "mila@github", "ownerKind": "other", "tags": ["tag:client"], "routes": [], "online": true}, {"id": "recipes", "name": "recipes", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.81.56.22", "lan": "172.23.0.2", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "__tagged__", "ownerKind": "tag", "tags": ["tag:server", "tag:ha-access"], "routes": [], "online": true}, {"id": "theoiphone", "name": "theo-iphone", "role": "client", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.29.13", "lan": "192.168.10.53", "lanKind": "lan", "loc": "lisbon", "os": "ios", "owner": "theo@github", "ownerKind": "other", "tags": ["tag:client", "tag:ha-access"], "routes": [], "online": true}, {"id": "theomacboo", "name": "theo-macbook", "role": "full", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.32.14", "lan": "192.168.10.54", "lanKind": "lan", "loc": "lisbon", "os": "macos", "owner": "theo@github", "ownerKind": "other", "tags": ["tag:client-full"], "routes": [], "online": true}, {"id": "thinkpadx1", "name": "thinkpad-x1", "role": "full", "site": "lisbon", "siteLabel": "Lisbon · home", "ip": "100.80.17.9", "lan": "192.168.10.41", "lanKind": "lan", "loc": "lisbon", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:client-full"], "routes": [], "online": true}, {"id": "triprouter", "name": "trip-router", "role": "server", "site": "mobile", "siteLabel": "Mobile · roaming", "ip": "100.82.71.27", "lan": "172.20.10.6", "lanKind": "uplink", "loc": "mobile", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:exit", "tag:server", "tag:subnet"], "routes": ["192.168.9.0/24"], "online": false}, {"id": "vanrouter", "name": "van-router", "role": "server", "site": "mobile", "siteLabel": "Mobile · roaming", "ip": "100.82.68.26", "lan": "10.44.2.87", "lanKind": "uplink", "loc": "mobile", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:exit", "tag:server", "tag:subnet"], "routes": ["192.168.8.0/24"], "online": true}, {"id": "wiki", "name": "wiki", "role": "server", "site": "dock", "siteLabel": "Docker @ crate", "ip": "100.82.65.25", "lan": "172.26.0.2", "lanKind": "lan", "loc": "dock", "os": "linux", "owner": "nadia@github", "ownerKind": "self", "tags": ["tag:server"], "routes": [], "online": true}], EDGES = [{"a": "milalaptop", "b": "atlas", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "backups", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "crate", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "hub", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "metrics", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "notes", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "officenuc", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "photos", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "recipes", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "triprouter", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "vanrouter", "kind": "full", "faint": false}, {"a": "milalaptop", "b": "wiki", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "atlas", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "backups", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "crate", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "hub", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "metrics", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "notes", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "officenuc", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "photos", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "recipes", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "triprouter", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "vanrouter", "kind": "full", "faint": false}, {"a": "nadiapixel", "b": "wiki", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "atlas", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "backups", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "crate", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "hub", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "metrics", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "notes", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "officenuc", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "photos", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "recipes", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "triprouter", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "vanrouter", "kind": "full", "faint": false}, {"a": "theomacboo", "b": "wiki", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "atlas", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "backups", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "crate", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "hub", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "metrics", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "notes", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "officenuc", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "photos", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "recipes", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "triprouter", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "vanrouter", "kind": "full", "faint": false}, {"a": "thinkpadx1", "b": "wiki", "kind": "full", "faint": false}, {"a": "kitchentab", "b": "hub", "kind": "peer", "faint": false}, {"a": "livingroom", "b": "hub", "kind": "peer", "faint": false}, {"a": "milaipad", "b": "hub", "kind": "peer", "faint": false}, {"a": "plotter", "b": "hub", "kind": "peer", "faint": false}, {"a": "theoiphone", "b": "hub", "kind": "peer", "faint": false}, {"a": "doorbellre", "b": "hub", "kind": "ha", "faint": false}, {"a": "kitchentab", "b": "hub", "kind": "ha", "faint": false}, {"a": "milaipad", "b": "hub", "kind": "ha", "faint": false}, {"a": "recipes", "b": "hub", "kind": "ha", "faint": false}, {"a": "theoiphone", "b": "hub", "kind": "ha", "faint": false}, {"a": "atlas", "b": "hub", "kind": "peer", "faint": false}, {"a": "backups", "b": "hub", "kind": "peer", "faint": false}, {"a": "crate", "b": "hub", "kind": "peer", "faint": false}, {"a": "metrics", "b": "hub", "kind": "peer", "faint": false}, {"a": "notes", "b": "hub", "kind": "peer", "faint": false}, {"a": "officenuc", "b": "hub", "kind": "peer", "faint": false}, {"a": "photos", "b": "hub", "kind": "peer", "faint": false}, {"a": "recipes", "b": "hub", "kind": "peer", "faint": false}, {"a": "triprouter", "b": "hub", "kind": "peer", "faint": false}, {"a": "vanrouter", "b": "hub", "kind": "peer", "faint": false}, {"a": "wiki", "b": "hub", "kind": "peer", "faint": false}], SITES = [{"id": "lisbon", "label": "Lisbon · home", "net": "192.168.10.0/24", "fx": 0.19, "fy": 0.28, "fr": 0.267, "tint": "255,209,102", "count": 8}, {"id": "berlin", "label": "Berlin · office", "net": "10.20.30.0/24", "fx": 0.54, "fy": 0.11, "fr": 0.147, "tint": "178,139,250", "count": 3}, {"id": "mobile", "label": "Mobile · roaming", "net": "phones · travel routers", "fx": 0.42, "fy": 0.78, "fr": 0.171, "tint": "45,212,191", "count": 4}, {"id": "dock", "label": "Docker @ crate", "net": "172.16/12 bridges", "fx": 0.78, "fy": 0.46, "fr": 0.267, "tint": "91,140,240", "count": 8}];
+  var cv = document.getElementById('cv'), stage = document.getElementById('stage');
+  var tip = document.getElementById('tip'), legendEl = document.getElementById('legend');
+  var ctx = cv.getContext('2d');
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var W = 0, H = 0, dpr = 1, hover = null, pinned = null, hidden = {};
+  var byId = {}; NODES.forEach(function (n) { byId[n.id] = n; });
+
+  function cssv(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  var C = {};
+  function readColors() {
+    C.role = { server: cssv('--h-server'), exit: cssv('--h-exit'), subnet: cssv('--h-subnet'),
+               full: cssv('--h-full'), client: cssv('--h-client'), home: cssv('--h-home'),
+               proxy: cssv('--h-proxy') };
+    C.kind = { full: cssv('--h-full'), ha: cssv('--h-proxy'), peer: cssv('--accent-2'),
+               net: cssv('--h-subnet') };
+    C.ink = cssv('--ink'); C.muted = cssv('--muted'); C.faint = cssv('--faint');
+    C.line = cssv('--line-2'); C.surf = cssv('--surface-2'); C.accent = cssv('--accent');
+  }
+  readColors();
+
+  /* How many nodes go on which ring inside a region.
+
+     Split by CIRCUMFERENCE, not evenly: an outer ring has far more room than
+     an inner one, so an even split crowds the inside and long names collide
+     there. A third ring appears once a single region gets really dense — a
+     Docker host with twenty-odd containers is the realistic case. */
+  function ringPlan(n) {
+    if (n <= 7) return [{ n: n, r: 0.86 }];
+    if (n <= 16) {
+      var o = Math.max(3, Math.round(n * 0.65));
+      return [{ n: o, r: 0.86 }, { n: n - o, r: 0.50 }];
+    }
+    var a = Math.round(n * 0.45), b = Math.round(n * 0.33);
+    return [{ n: a, r: 0.86 }, { n: b, r: 0.60 }, { n: n - a - b, r: 0.32 }];
+  }
+
+  function place() {
+    var pad = Math.min(W, H) * 0.05;
+    SITES.forEach(function (s) {
+      s.cx = pad + s.fx * (W - pad * 2);
+      s.cy = pad + s.fy * (H - pad * 2);
+      s.r = Math.min(W, H) * s.fr;
+    });
+    // Fit the regions to the canvas, in both directions. Radii come from
+    // device counts alone, so without this a phone-sized canvas gets circles
+    // scaled for a desktop — and a tailnet that lives in ONE region gets a
+    // small circle with 20 labels crammed into it while half the frame stays
+    // empty. Narrow screens get a tighter budget: labels need proportionally
+    // more room there.
+    var narrow = W < 620;
+    var want = SITES.reduce(function (a, s) { return a + Math.PI * s.r * s.r; }, 0);
+    var budget = W * H * (narrow ? 0.22 : 0.32);
+    // clamped so one lonely region cannot balloon, and never past the frame
+    var fit = Math.min(1.55, Math.max(0.6, Math.sqrt(budget / Math.max(1, want))));
+    var rMax = Math.min(W - 2 * 6, H - 66 - 6) / 2 - 4;
+    SITES.forEach(function (s) { s.r = Math.min(s.r * fit, rMax); });
+
+    // On a phone the canvas is tall and narrow, so side-by-side regions leave
+    // no room for the captions — they end up printed over their neighbours.
+    // Stack the regions in one column instead, keeping their north-to-south
+    // order, and let the relaxation below fine-tune the spacing.
+    if (narrow) {
+      var col = SITES.slice().sort(function (a, b) { return a.fy - b.fy; });
+      // Grow the circles to use the free width, but only as far as the column
+      // still fits vertically once captions and gaps are accounted for.
+      var room = H - 44 - 6 - 52 * (col.length - 1);
+      var stack = col.reduce(function (a, s) { return a + 2 * s.r; }, 0);
+      var grow = Math.min(room / stack, (W / 2 - 14) / Math.max.apply(null,
+                          col.map(function (s) { return s.r; })));
+      col.forEach(function (s) { s.r *= grow; });
+      var yy = 44;
+      col.forEach(function (s) { s.cx = W / 2; s.cy = yy + s.r; yy += 2 * s.r + 52; });
+    }
+
+    // fx/fy are only a STARTING arrangement. Devices move between sites as
+    // their LAN address changes, so a cluster that is tiny today can be the
+    // biggest one tomorrow — with fixed centres its circle would then run off
+    // the canvas and cut through its neighbour. Relax the layout instead:
+    // push overlapping circles apart, then pull everything back inside the
+    // frame, repeatedly. Order matters — the clamp runs last so staying in
+    // view always wins over the separation.
+    // Stacked regions need a wider gap than side-by-side ones: the two caption
+    // lines of the lower region live in the space between them.
+    // TOP is the clearance above a circle. On wide screens the timestamp and
+    // the hint sit in the canvas' top row, so captions must start below them;
+    // on narrow ones both live outside the map and only the caption needs room.
+    var GAP = narrow ? 52 : 22, EDGE = 6, TOP = narrow ? 44 : 66;
+    for (var it = 0; it < 60; it++) {
+      for (var i = 0; i < SITES.length; i++) {
+        for (var j = i + 1; j < SITES.length; j++) {
+          var a = SITES[i], b = SITES[j];
+          var dx = b.cx - a.cx, dy = b.cy - a.cy;
+          var d = Math.hypot(dx, dy) || 0.01, need = a.r + b.r + GAP;
+          if (d >= need) continue;
+          var push = (need - d) / 2, ux = dx / d, uy = dy / d;
+          a.cx -= ux * push; a.cy -= uy * push;
+          b.cx += ux * push; b.cy += uy * push;
+        }
+      }
+      SITES.forEach(function (s) {
+        s.cx = Math.min(Math.max(s.cx, s.r + EDGE), W - s.r - EDGE);
+        // extra room on top: the two caption lines live above each circle and
+        // the timestamp is pinned to the top-left corner of the canvas
+        s.cy = Math.min(Math.max(s.cy, s.r + TOP), H - s.r - EDGE);
+      });
+    }
+    var per = {};
+    NODES.forEach(function (n) { (per[n.site] = per[n.site] || []).push(n); });
+    SITES.forEach(function (s) {
+      var list = per[s.id] || [];
+      var w = { home: 0, server: 1, exit: 2, subnet: 2, proxy: 3, full: 4, client: 5 };
+      list.sort(function (a, b) { return (w[a.role] - w[b.role]) || a.name.localeCompare(b.name); });
+      var n = list.length;
+      var plan = ringPlan(n), ring = 0, base = 0;
+      list.forEach(function (nd, i) {
+        if (n === 1) { nd.hx = s.cx; nd.hy = s.cy; nd.lab = 1; return; }
+        while (i >= base + plan[ring].n) { base += plan[ring].n; ring++; }
+        var idx = i - base, cnt = plan[ring].n;
+        var rad = s.r * plan[ring].r;
+        // Few nodes read better spread left/right (labels sit below the dot),
+        // more nodes start at the top like a clock face.
+        var start = cnt <= 3 ? 0 : -Math.PI / 2;
+        // Offset every inner ring by HALF a slot so its nodes sit in the gaps
+        // of the one outside it rather than lining up radially behind them — a
+        // fixed offset did not scale with the node count and still let long
+        // names collide in crowded sites.
+        var a = (idx / cnt) * Math.PI * 2 + start + (ring ? Math.PI / cnt : 0);
+        nd.hx = s.cx + Math.cos(a) * rad;
+        nd.hy = s.cy + Math.sin(a) * rad * 0.88;
+        // Labels point away from the cluster centre: nodes in the upper half
+        // get their name above the dot. Keeps names apart in dense sites.
+        // Excluded is the narrow band at the very top — a name placed there
+        // runs straight into the site caption sitting above the circle.
+        nd.lab = (Math.sin(a) < -0.15 && Math.abs(Math.cos(a)) > 0.38) ? -1 : 1;
+      });
+    });
+    NODES.forEach(function (n) {
+      if (n.x === undefined) { n.x = n.hx; n.y = n.hy; n.ph = Math.random() * 6.28; }
+    });
+  }
+
+  function resize() {
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width; H = r.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    place();
+  }
+
+  function nodeAt(mx, my) {
+    var best = null, bd = 24;
+    NODES.forEach(function (n) {
+      if (hidden[n.role]) return;
+      var d = Math.hypot(n.x - mx, n.y - my);
+      if (d < bd) { bd = d; best = n; }
+    });
+    return best;
+  }
+  stage.addEventListener('mousemove', function (e) {
+    var r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    var n = nodeAt(mx, my);
+    if (n !== hover) { hover = n; showTip(n, mx, my); } else if (n) { moveTip(mx, my); }
+    stage.style.cursor = n ? 'pointer' : 'default';
+  });
+  stage.addEventListener('mouseleave', function () { hover = null; showTip(null); });
+  stage.addEventListener('click', function (e) {
+    var r = cv.getBoundingClientRect();
+    var n = nodeAt(e.clientX - r.left, e.clientY - r.top);
+    pinned = (pinned && n && pinned.id === n.id) ? null : n;
+  });
+
+  function moveTip(mx, my) {
+    var w = tip.offsetWidth || 210, h = tip.offsetHeight || 130;
+    tip.style.left = Math.min(Math.max(10, mx + 16), Math.max(10, W - w - 10)) + 'px';
+    tip.style.top = Math.min(Math.max(10, my + 14), Math.max(10, H - h - 10)) + 'px';
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+  }
+  function row(k, v) { return '<div class="r"><span>' + k + '</span><b>' + esc(v) + '</b></div>'; }
+  function showTip(n, mx, my) {
+    if (!n) { tip.classList.remove('on'); return; }
+    var out = 0, inc = 0;
+    EDGES.forEach(function (e) { if (e.a === n.id) out++; else if (e.b === n.id) inc++; });
+    var tags = (n.tags || []).map(function (t) {
+      var k = t.replace('tag:', '');
+      return '<span class="chip ' + (k === 'client-full' ? 'full' : k) + '">' + k + '</span>';
+    }).join('');
+    tip.innerHTML =
+      '<h4><span style="width:9px;height:9px;border-radius:50%;background:' +
+        (C.role[n.role] || C.muted) + ';display:inline-block"></span>' + esc(n.name) +
+        (n.online ? '' : ' <span class="off">offline</span>') + '</h4>' +
+      row('site', n.siteLabel) + row('tailscale', n.ip) +
+      // routers serve their own LANs; what places them is the uplink they got
+      row(n.lanKind === 'uplink' ? 'uplink' : 'local', n.lan) +
+      row('os', n.os) +
+      row('owner', n.ownerKind === 'tag' ? 'tag-owned (auth key)' : n.owner) +
+      (n.routes && n.routes.length ? row('routes', n.routes.join(' ')) : '') +
+      row('reaches', out) + row('reached by', inc) +
+      (tags ? '<div class="tags">' + tags + '</div>' : '');
+    tip.classList.add('on'); moveTip(mx, my);
+  }
+
+  function buildLegend() {
+    var roles = {};
+    NODES.forEach(function (n) { roles[n.role] = (roles[n.role] || 0) + 1; });
+    legendEl.innerHTML = Object.keys(roles).sort().map(function (r) {
+      return '<span class="lg' + (hidden[r] ? ' off' : '') + '" data-r="' + r + '">' +
+        '<i style="background:' + (C.role[r] || C.muted) + '"></i>' + r +
+        ' <span style="opacity:.55">' + roles[r] + '</span></span>';
+    }).join('');
+    [].forEach.call(legendEl.children, function (el) {
+      el.onclick = function () {
+        var r = el.getAttribute('data-r'); hidden[r] = !hidden[r];
+        if (hover && hidden[hover.role]) { hover = null; showTip(null); }
+        if (pinned && hidden[pinned.role]) pinned = null;
+        buildLegend();
+      };
+    });
+  }
+
+  function quad(x0, y0, cx, cy, x1, y1, t) {
+    var u = 1 - t;
+    return { x: u * u * x0 + 2 * u * t * cx + t * t * x1,
+             y: u * u * y0 + 2 * u * t * cy + t * t * y1 };
+  }
+  function focusId() { var f = pinned || hover; return f ? f.id : null; }
+
+  function drawSite(s, t) {
+    var br = reduce ? 0 : Math.sin(t * 0.0004 + s.ph) * 3;
+    var R = s.r + br;
+    var x = s.cx + s.dx, y = s.cy + s.dy;
+    var tint = s.tint || '127,150,200';
+
+    // filled halo — each site has its own tint so the regions read as places
+    var g = ctx.createRadialGradient(x, y, R * .15, x, y, R);
+    g.addColorStop(0, 'rgba(' + tint + ',.13)');
+    g.addColorStop(.72, 'rgba(' + tint + ',.05)');
+    g.addColorStop(1, 'rgba(' + tint + ',0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+
+    // rim: a solid soft ring plus a slowly rotating dashed one on top
+    ctx.strokeStyle = 'rgba(' + tint + ',.30)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.stroke();
+    ctx.save();
+    ctx.translate(x, y);
+    if (!reduce) ctx.rotate((t * 0.00004 + s.ph) % 6.283);
+    ctx.setLineDash([5, 9]);
+    ctx.strokeStyle = 'rgba(' + tint + ',.55)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Caption above the circle, but flipped underneath when the circle sits
+    // too close to the top edge, and pulled horizontally so it cannot run off
+    // the side — both happen constantly on a phone-width canvas.
+    ctx.textAlign = 'center';
+    ctx.font = '600 10.5px ' + cssv('--mono');
+    var cap = s.label.toUpperCase();
+    var lx = clampText(x, Math.max(ctx.measureText(cap).width, 78));
+    var above = y - R - 34 > 4;
+    ctx.fillStyle = 'rgba(' + tint + ',.85)';
+    ctx.fillText(cap, lx, above ? y - R - 26 : y + R + 20);
+    ctx.fillStyle = C.faint;
+    ctx.font = '9px ' + cssv('--mono');
+    ctx.fillText(s.net, clampText(x, ctx.measureText(s.net).width),
+                 above ? y - R - 14 : y + R + 32);
+  }
+
+  /* Keep a centred text box inside the canvas. */
+  function clampText(x, w) {
+    return Math.min(Math.max(x, w / 2 + 5), W - w / 2 - 5);
+  }
+
+  function drawEdge(e, t) {
+    var a = byId[e.a], b = byId[e.b];
+    if (!a || !b || hidden[a.role] || hidden[b.role]) return;
+    var f = focusId(), lit = f && (e.a === f || e.b === f);
+    var col = C.kind[e.kind] || C.accent;
+    ctx.globalAlpha = f ? (lit ? .5 : .035) : (e.faint ? .08 : .17);
+    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    var lift = Math.min(80, Math.hypot(b.x - a.x, b.y - a.y) * .18);
+    var cx = mx, cy = my - lift;
+    ctx.strokeStyle = col; ctx.lineWidth = lit ? 1.6 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(cx, cy, b.x, b.y); ctx.stroke();
+    if (reduce) { ctx.globalAlpha = 1; return; }
+    var cnt = lit ? 3 : 1;
+    for (var i = 0; i < cnt; i++) {
+      var p = ((t * (lit ? .00034 : .0002)) + e.off + i / cnt) % 1;
+      var q = quad(a.x, a.y, cx, cy, b.x, b.y, p);
+      ctx.globalAlpha = (lit ? .95 : .4) * Math.sin(p * Math.PI);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(q.x, q.y, lit ? 2.6 : 1.7, 0, 7); ctx.fill();
+      if (e.bidir) {
+        var q2 = quad(b.x, b.y, cx, cy, a.x, a.y, p);
+        ctx.beginPath(); ctx.arc(q2.x, q2.y, lit ? 2.6 : 1.7, 0, 7); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawNode(n, t) {
+    var f = focusId();
+    var linked = f && EDGES.some(function (e) {
+      return (e.a === f && e.b === n.id) || (e.b === f && e.a === n.id); });
+    var dim = f && f !== n.id && !linked;
+    var col = C.role[n.role] || C.muted;
+    var r = n.role === 'home' ? 9 : (n.role === 'server' ? 6.5 : 6);
+    if (f === n.id) r += 2;
+    var pulse = reduce ? .5 : (Math.sin(t * .0021 + n.ph) * .5 + .5);
+    ctx.globalAlpha = dim ? .2 : 1;
+    if (!dim) {
+      var g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 4.2);
+      g.addColorStop(0, col + (n.online ? '55' : '20'));
+      g.addColorStop(1, col + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(n.x, n.y, r * 4.2, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r + (n.online ? pulse * .8 : 0), 0, 7); ctx.fill();
+    if (!n.online) {
+      ctx.fillStyle = C.surf;
+      ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(1, r - 2.4), 0, 7); ctx.fill();
+    }
+    if (f === n.id) {
+      ctx.strokeStyle = col; ctx.globalAlpha = .45 + pulse * .3; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 7 + pulse * 3, 0, 7); ctx.stroke();
+    }
+    // Ownership, quietly: a device belonging to another person gets a solid
+    // outer ring, one owned by its tag (joined on an auth key, no user at all)
+    // a dashed one. Everything unmarked is the tailnet owner's.
+    if (n.ownerKind && n.ownerKind !== 'self') {
+      ctx.save();
+      ctx.strokeStyle = C.muted; ctx.globalAlpha = dim ? .2 : .6; ctx.lineWidth = 1.1;
+      if (n.ownerKind === 'tag') ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 4.5, 0, 7); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.globalAlpha = dim ? .28 : 1;
+    ctx.fillStyle = (f === n.id) ? C.ink : C.muted;
+    ctx.font = (f === n.id ? '600 ' : '') + (W < 620 ? '9.5px ' : '10.5px ') + cssv('--sans');
+    ctx.textAlign = 'center';
+    ctx.fillText(n.name, clampText(n.x, ctx.measureText(n.name).width),
+                 n.y + (n.lab < 0 ? -(r + 8) : r + 13));
+    ctx.globalAlpha = 1;
+  }
+
+  function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    // whole regions drift slowly; their nodes ride along so a cluster never
+    // separates from its ring
+    SITES.forEach(function (s) {
+      s.dx = reduce ? 0 : Math.sin(t * .00017 + s.ph) * 9;
+      s.dy = reduce ? 0 : Math.cos(t * .00021 + s.ph * 1.3) * 7;
+    });
+    SITES.forEach(function (s) { drawSite(s, t); });
+    NODES.forEach(function (n) {
+      var d = reduce ? 0 : 1, s = siteOf[n.site];
+      var ox = s ? s.dx : 0, oy = s ? s.dy : 0;
+      n.x += ((n.hx + ox + Math.sin(t * .0003 + n.ph) * 3 * d) - n.x) * .06;
+      n.y += ((n.hy + oy + Math.cos(t * .00027 + n.ph) * 3 * d) - n.y) * .06;
+    });
+    EDGES.forEach(function (e) { drawEdge(e, t); });
+    NODES.forEach(function (n) { if (!hidden[n.role]) drawNode(n, t); });
+    requestAnimationFrame(frame);
+  }
+
+  EDGES.forEach(function (e, i) { e.off = (i * .137) % 1; });
+  var siteOf = {};
+  SITES.forEach(function (s, i) { s.ph = i * 1.7; s.dx = 0; s.dy = 0; siteOf[s.id] = s; });
+  new ResizeObserver(resize).observe(stage);
+  resize(); buildLegend();
+  requestAnimationFrame(frame);
+  /* ---- live updates -------------------------------------------------
+     The page polls a data-only endpoint while you are looking at it. The
+     server coalesces those polls, so more open tabs do not mean more calls
+     to Tailscale. Polling stops after LIVE_BUDGET of *visible* time — a tab
+     left open for hours must not keep asking forever. */
+  var LIVE_EVERY = 10000, LIVE_BUDGET = 300000;
+  var liveEl = document.getElementById('live'), stampEl = document.getElementById('stamp');
+  var liveSpent = 0, liveTimer = null, liveLast = 0, liveStop = false;
+
+  function setLive(txt, cls) {
+    if (!liveEl) return;
+    liveEl.textContent = txt;
+    liveEl.className = 'live' + (cls ? ' ' + cls : '');
+  }
+
+  function apply(s) {
+    // Keep the drawing state of nodes that still exist so the map does not
+    // jump on every poll; brand-new ones start at their target position.
+    var prev = {};
+    NODES.forEach(function (n) { prev[n.id] = n; });
+    NODES.length = 0;
+    s.nodes.forEach(function (n) {
+      var o = prev[n.id];
+      if (o) { n.x = o.x; n.y = o.y; n.ph = o.ph; }
+      NODES.push(n);
+    });
+    byId = {}; NODES.forEach(function (n) { byId[n.id] = n; });
+
+    var ph = {};
+    SITES.forEach(function (x) { ph[x.id] = x; });
+    SITES.length = 0;
+    s.sites.forEach(function (x, i) {
+      var o = ph[x.id];
+      x.ph = o ? o.ph : i * 1.7; x.dx = o ? o.dx : 0; x.dy = o ? o.dy : 0;
+      SITES.push(x); siteOf[x.id] = x;
+    });
+    Object.keys(siteOf).forEach(function (k) {
+      if (!s.sites.some(function (x) { return x.id === k; })) delete siteOf[k];
+    });
+
+    EDGES.length = 0; s.edges.forEach(function (e) { EDGES.push(e); });
+
+    // a pinned or hovered node may have vanished between polls
+    if (pinned) pinned = byId[pinned.id] || null;
+    if (hover) hover = byId[hover.id] || null;
+    if (!hover && !pinned) showTip(null);
+
+    var put = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    put('k-devices', s.kpi.devices); put('k-online', s.kpi.online);
+    put('k-grants', s.kpi.grants); put('k-sites', s.kpi.sites);
+    put('k-users', (s.users || []).length);
+    // Only touch a table when its content actually changed — replacing
+    // innerHTML every 10s would drop any text selection and reset how far the
+    // user had scrolled the panel sideways.
+    var body = function (id, h) {
+      var el = document.getElementById(id);
+      if (el && el.innerHTML !== h) el.innerHTML = h;
+    };
+    body('tb-devices', s.rows.devices); body('tb-grants', s.rows.grants);
+    body('tb-sites', s.rows.sites); body('tb-users', s.rows.users);
+    if (stampEl) stampEl.textContent = 'atlas.live · ' + s.stamp;
+
+    place(); buildLegend();
+  }
+
+  function poll() {
+    fetch('api/state', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (s) {
+        if (s.error) { setLive('· stale (' + s.error + ')', 'warn'); return; }
+        apply(s);
+        setLive('· live');
+      })
+      .catch(function (e) { setLive('· offline (' + e + ')', 'warn'); });
+  }
+
+  function tick() {
+    if (liveStop) return;
+    var now = Date.now();
+    liveSpent += now - liveLast; liveLast = now;
+    if (liveSpent >= LIVE_BUDGET) { pauseLive(true); return; }
+    poll();
+  }
+
+  function startLive() {
+    if (liveTimer || liveStop) return;
+    liveLast = Date.now();
+    liveTimer = setInterval(tick, LIVE_EVERY);
+    setLive('· live');
+  }
+
+  function pauseLive(spent) {
+    if (liveTimer) { liveSpent += Date.now() - liveLast; clearInterval(liveTimer); liveTimer = null; }
+    if (spent) { liveStop = true; setLive('· paused — reload for live', 'idle'); }
+  }
+
+  // Only count time the page is actually being looked at, and never poll from
+  // a backgrounded tab.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) pauseLive(false);
+    else if (!liveStop) { startLive(); poll(); }
+  });
+  liveStop = true; setLive('\u00b7 demo snapshot', 'idle');
+
+  new MutationObserver(function () { readColors(); buildLegend(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  // The CSS follows the system scheme on its own, but the canvas colours are
+  // read once into C — without this the map keeps its old palette when the
+  // phone flips to dark at sunset while the page is open.
+  var scheme = matchMedia('(prefers-color-scheme: dark)');
+  (scheme.addEventListener ? scheme.addEventListener.bind(scheme, 'change')
+                           : scheme.addListener.bind(scheme))(
+    function () { readColors(); buildLegend(); });
+})();
+</script>

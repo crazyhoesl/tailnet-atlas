@@ -30,6 +30,17 @@ os.environ.setdefault("TEMPLATE_PATH", str(ROOT / "app" / "template.html"))
 import render  # noqa: E402
 
 OUT = pathlib.Path(__file__).resolve().parent / "out"
+REPO = "https://github.com/crazyhoesl/tailnet-atlas"
+
+BANNER = (
+    '\n      <p class="lede" style="margin-top:10px;padding:9px 12px;'
+    'border-left:2px solid var(--accent);background:rgba(127,140,170,.09);'
+    'border-radius:0 8px 8px 0;font-size:13px">'
+    '<b>This is a demo.</b> Every device, user, site and network below is '
+    'invented — but it is rendered by the real code, not mocked up. '
+    f'Source and setup: <a href="{REPO}" '
+    'style="color:var(--accent)">github.com/crazyhoesl/tailnet-atlas</a></p>'
+)
 
 OWNER, MATE, COLLEAGUE = "nadia@github", "theo@github", "mila@github"
 
@@ -124,16 +135,28 @@ def main() -> None:
     (OUT / "index.html").write_text(page, encoding="utf-8")
     (OUT / "state.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
-    # A second copy that works straight off disk. Opened as a file there is no
-    # /api/state, and the live poll would paint a red error badge over the map;
-    # liveStop must be SET rather than merely "not started", or the
-    # visibilitychange handler restarts polling on the first tab switch.
+    # A standalone copy that works straight off disk and on GitHub Pages.
+    # Neither has an /api/state, and the live poll would paint a red error
+    # badge over the map; liveStop must be SET rather than merely "not
+    # started", or the visibilitychange handler restarts polling on the first
+    # tab switch.
     marker = "if (!document.hidden) { startLive(); poll(); }"
     if marker not in page:
         raise SystemExit("live bootstrap not found — standalone build would poll and fail")
-    (OUT / "atlas-demo.html").write_text(
-        page.replace(marker, "liveStop = true; setLive('\\u00b7 demo snapshot', 'idle');"),
-        encoding="utf-8")
+    standalone = page.replace(
+        marker, "liveStop = true; setLive('\\u00b7 demo snapshot', 'idle');")
+
+    # Anyone arriving from a link needs to know within one second that these
+    # devices are invented, and where the real thing lives.
+    lede_end = "the target never answers back.</p>"
+    if lede_end not in standalone:
+        raise SystemExit("lede not found — demo banner would go missing")
+    standalone = standalone.replace(lede_end, lede_end + BANNER, 1)
+
+    (OUT / "atlas-demo.html").write_text(standalone, encoding="utf-8")
+    docs = ROOT / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "index.html").write_text(standalone, encoding="utf-8")
 
     print("sites :", " ".join(f'{s["id"]}={s["count"]}' for s in data["sites"]))
     print("nodes :", len(data["nodes"]), " edges:", len(data["edges"]),

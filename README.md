@@ -6,10 +6,15 @@ It reads your device list and your policy file from the Tailscale API and draws
 them as one picture — devices grouped by where they physically are, lines taken
 straight from your grants.
 
+### ▶ [Try the live demo](https://crazyhoesl.github.io/tailnet-atlas/)
+
+Hover the nodes, click one to pin it, click a role in the legend to filter.
+
 ![Tailnet Atlas](docs/atlas-demo.gif)
 
-*Everything in that recording is invented — fake devices, users, sites and
-networks. You can generate it yourself, see [Demo](#demo).*
+*Everything in the demo and the recording is invented — fake devices, users,
+sites and networks — but it is rendered by the real code, not mocked up. You
+can regenerate it yourself, see [Demo](#demo).*
 
 ---
 
@@ -106,7 +111,11 @@ open demo/out/atlas-demo.html
 ```
 
 `demo/out/atlas-demo.html` is a single self-contained file you can open from
-disk. To re-record the GIF:
+disk. The same build is written to `docs/index.html`, which is what GitHub
+Pages serves as the [live demo](https://crazyhoesl.github.io/tailnet-atlas/) —
+so regenerating and committing keeps the hosted page in step.
+
+To re-record the GIF:
 
 ```bash
 cd demo && npm install
