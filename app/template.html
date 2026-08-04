@@ -1,0 +1,724 @@
+<meta charset="utf-8">
+<title>Tailnet Atlas — __TAILNET_SHORT__</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Cg fill='%232c3a52'%3E%3Ccircle cx='18' cy='18' r='6'/%3E%3Ccircle cx='32' cy='18' r='6'/%3E%3Ccircle cx='46' cy='18' r='6'/%3E%3Ccircle cx='18' cy='46' r='6'/%3E%3Ccircle cx='32' cy='46' r='6'/%3E%3Ccircle cx='46' cy='46' r='6'/%3E%3C/g%3E%3Cg fill='%234de0e6'%3E%3Ccircle cx='18' cy='32' r='6'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3Ccircle cx='46' cy='32' r='6'/%3E%3C/g%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#060a12; --surface:#0d141f; --surface-2:#111b28;
+    --ink:#e9eef8; --muted:#96a4bc; --faint:#5d6c82; --line:#1b2534; --line-2:#2a3849;
+    --accent:#4de0e6; --accent-2:#6f8dff; --warm:#f6b23c; --crit:#ff6b81; --ok:#3ddc97;
+    --h-server:#5b8cf0; --h-exit:#b28bfa; --h-subnet:#2dd4bf; --h-full:#f6b23c;
+    --h-client:#8592a8; --h-home:#ffd166; --h-proxy:#4de0e6;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --glow:0 0 0 1px var(--line),0 24px 60px -30px rgba(0,0,0,.8);
+  }
+  @media (prefers-color-scheme:light){:root:not([data-theme=dark]){
+    --bg:#eaeef4; --surface:#fff; --surface-2:#f4f7fb;
+    --ink:#0d1520; --muted:#51617a; --faint:#8b99ac; --line:#e0e7f0; --line-2:#cdd8e6;
+    --accent:#0f97ab; --accent-2:#2f5bd0; --warm:#b9770f; --crit:#d23a54; --ok:#0f9d68;
+    --h-server:#2f6ae0; --h-exit:#7c4fe0; --h-subnet:#0e9d8d; --h-full:#bd7a0d;
+    --h-client:#6a768b; --h-home:#c1890a; --h-proxy:#0f97ab;
+    --glow:0 1px 2px rgba(15,23,42,.06),0 20px 44px -28px rgba(15,23,42,.3);
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1240px;margin:0 auto;padding:26px 22px 80px}
+
+  .head{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:11px;font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:beat 2.6s infinite}
+  @keyframes beat{0%{box-shadow:0 0 0 0 rgba(61,220,151,.5)}70%{box-shadow:0 0 0 9px rgba(61,220,151,0)}100%{box-shadow:0 0 0 0 rgba(61,220,151,0)}}
+  h1{font-size:clamp(26px,4vw,40px);margin:6px 0 4px;letter-spacing:-.02em;font-weight:650}
+  .grad{background:linear-gradient(96deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{color:var(--muted);max-width:56ch;margin:0}
+  .kpis{display:flex;gap:22px;margin-left:auto;flex-wrap:wrap}
+  .kpi b{display:block;font-size:26px;font-family:var(--mono);letter-spacing:-.02em}
+  .kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+
+  .stagewrap{position:relative;margin-bottom:12px}
+  .stage{position:relative;height:min(72vh,700px);min-height:460px;border-radius:18px;
+    background:linear-gradient(180deg,var(--surface),var(--surface-2));
+    box-shadow:var(--glow);overflow:hidden}
+  canvas{display:block;width:100%;height:100%}
+  .stamp{position:absolute;left:14px;top:12px;font:11px/1 var(--mono);color:var(--faint);
+    letter-spacing:.08em;pointer-events:none}
+  .hint{position:absolute;right:14px;top:12px;font:11px/1 var(--mono);color:var(--faint);
+    pointer-events:none}
+  .live{margin-left:7px;color:var(--ok)}
+  .live::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+    background:var(--ok);margin-right:5px;vertical-align:middle;animation:beat 2.6s infinite}
+  .live.idle,.live.warn{color:var(--faint)}
+  .live.idle::before{background:var(--faint);animation:none}
+  .live.warn{color:var(--crit)}
+  .live.warn::before{background:var(--crit);animation:none}
+  .legend{position:absolute;left:14px;bottom:12px;display:flex;gap:7px;flex-wrap:wrap;
+    max-width:calc(100% - 28px)}
+  .lg{display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;
+    background:rgba(127,140,170,.13);font-size:11px;color:var(--muted);cursor:pointer;
+    user-select:none;border:1px solid transparent;transition:.15s}
+  .lg:hover{border-color:var(--line-2);color:var(--ink)}
+  .lg.off{opacity:.32}
+  .lg i{width:8px;height:8px;border-radius:2px;display:block}
+  .tip{position:absolute;pointer-events:none;z-index:5;min-width:200px;padding:11px 13px;
+    border-radius:12px;background:rgba(10,16,26,.95);border:1px solid var(--line-2);
+    box-shadow:0 18px 40px -18px rgba(0,0,0,.9);opacity:0;transform:translateY(4px);
+    transition:opacity .13s,transform .13s;font-size:12px}
+  @media (prefers-color-scheme:light){:root:not([data-theme=dark]) .tip{background:rgba(255,255,255,.97)}}
+  .tip.on{opacity:1;transform:none}
+  .tip h4{margin:0 0 7px;font-size:13.5px;display:flex;align-items:center;gap:7px}
+  .tip .r{display:flex;justify-content:space-between;gap:16px;color:var(--muted);
+    font-family:var(--mono);font-size:11px;padding:1.5px 0}
+  .tip .r b{color:var(--ink);font-weight:500}
+  .tip .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+
+  section{margin-top:40px}
+  .sec{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .idx{font:11px var(--mono);color:var(--accent);letter-spacing:.14em}
+  h2{font-size:19px;margin:0;font-weight:620}
+  .sec p{margin:0;color:var(--muted);font-size:13px}
+  .panel{background:var(--surface);border-radius:14px;box-shadow:var(--glow);overflow-x:auto}
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--faint);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line);
+    white-space:nowrap}
+  .tbl td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tbody tr{transition:background .12s}
+  .tbl tbody tr:hover{background:rgba(127,140,170,.07)}
+  .name{font-weight:560;white-space:nowrap}
+  .ip{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .note{font-size:11px;color:var(--faint)}
+  .note.nw{white-space:nowrap}
+  .chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .chip{font:11px/1.5 var(--mono);padding:2px 8px;border-radius:999px;
+    background:rgba(127,140,170,.16);color:var(--muted);white-space:nowrap}
+  .chip.server{background:color-mix(in srgb,var(--h-server) 20%,transparent);color:var(--h-server)}
+  .chip.exit{background:color-mix(in srgb,var(--h-exit) 20%,transparent);color:var(--h-exit)}
+  .chip.subnet{background:color-mix(in srgb,var(--h-subnet) 20%,transparent);color:var(--h-subnet)}
+  .chip.full{background:color-mix(in srgb,var(--h-full) 20%,transparent);color:var(--h-full)}
+  .chip.client{background:color-mix(in srgb,var(--h-client) 22%,transparent);color:var(--h-client)}
+  .chip.home{background:color-mix(in srgb,var(--h-home) 20%,transparent);color:var(--h-home)}
+  .chip.proxy,.chip.ha-access{background:color-mix(in srgb,var(--h-proxy) 20%,transparent);color:var(--h-proxy)}
+  .port{font:11px var(--mono);padding:2px 7px;border-radius:6px;
+    background:rgba(109,141,255,.16);color:var(--accent-2)}
+  .port.all{background:rgba(246,178,60,.16);color:var(--warm)}
+  .flow{font-family:var(--mono);font-size:12px}
+  .to{color:var(--faint);padding:0 3px}
+  .off{color:var(--crit);font-size:11px;font-family:var(--mono)}
+  .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+    color:var(--faint);font-size:12px;display:flex;gap:18px;flex-wrap:wrap}
+  .foot code{font-family:var(--mono);color:var(--muted)}
+  /* --- narrow screens -------------------------------------------------
+     The map needs a taller, less cramped box; the legend moves below it
+     instead of covering nodes; the hint line is dropped because it and the
+     timestamp are both pinned to the top row and collided. */
+  @media (max-width:720px){
+    .wrap{padding:18px 14px 60px}
+    .kpis{margin-left:0;gap:10px 0;width:100%;display:grid;
+      grid-template-columns:repeat(3,1fr)}
+    .kpi b{font-size:21px}
+    .kpi span{font-size:9.5px;letter-spacing:.06em}
+    .head{gap:14px}
+    .lede{font-size:14px}
+    /* taller than the viewport on purpose: stacked regions only become
+       readable when each circle can use the full width */
+    .stage{height:min(132vh,1060px);min-height:720px}
+    .hint{display:none}
+    .legend{position:static;margin-top:9px;max-width:none;gap:6px}
+    .lg{font-size:10.5px;padding:3px 8px}
+    .stamp{position:static;margin-top:8px;font-size:10px}
+    section{margin-top:30px}
+    h2{font-size:17px}
+    .tbl{font-size:12.5px}
+    .tbl th,.tbl td{padding:8px 11px}
+    /* The tables scroll sideways here. Without this the chip cells wrap inside
+       their (off-screen) column and blow the row height up, which reads as a
+       stack of tall empty rows in the part you can actually see. */
+    .chips,.tip .tags{flex-wrap:nowrap}
+    .panel{-webkit-overflow-scrolling:touch}
+    .foot{gap:10px}
+  }
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <div class="brand"><span class="dot"></span> Tailnet __TAILNET__</div>
+      <h1>Access as <span class="grad">Geography</span></h1>
+      <p class="lede">Devices grouped by where they physically sit. Lines are grants —
+        directed: the source initiates, the target never answers back.</p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b id="k-devices">__N_DEVICES__</b><span>devices</span></div>
+      <div class="kpi"><b id="k-online">__N_ONLINE__</b><span>online</span></div>
+      <div class="kpi"><b id="k-grants">__N_GRANTS__</b><span>grants</span></div>
+      <div class="kpi"><b id="k-sites">__N_SITES__</b><span>sites</span></div>
+      <div class="kpi"><b id="k-users">__N_USERS__</b><span>owners</span></div>
+    </div>
+  </div>
+
+  <div class="stagewrap">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="hint">hover a node · click to pin · click a role to filter</div>
+      <div class="tip" id="tip"></div>
+    </div>
+    <!-- outside .stage so they can drop below the map on narrow screens instead
+         of covering it; on desktop they are absolutely placed back over it -->
+    <div class="legend" id="legend"></div>
+    <div class="stamp"><span id="stamp">atlas.live · __STAMP__</span><span id="live" class="live"></span></div>
+  </div>
+
+  <section>
+    <div class="sec"><span class="idx">01</span><h2>Devices</h2>
+      <p>__N_DEVICES__ nodes. Placement follows the address a device was last given by the
+        network it joined — for the travel routers that is their uplink, not the LAN they serve.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Device</th><th>Tailscale IP</th><th>Local · site</th><th>OS</th><th>Roles</th></tr></thead>
+      <tbody id="tb-devices">__DEVICE_ROWS__</tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">02</span><h2>Grants</h2>
+      <p>Directed rules from the live policy file. Anything not listed here is denied.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>#</th><th>Source</th><th>Target</th><th>Ports</th><th>Edges drawn</th></tr></thead>
+      <tbody id="tb-grants">__GRANT_ROWS__</tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">03</span><h2>Sites</h2>
+      <p>Physical grouping. Containers share their host's uplink, so they form their own cluster.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Site</th><th>Network</th><th>Devices</th><th>Roles present</th></tr></thead>
+      <tbody id="tb-sites">__SITE_ROWS__</tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">04</span><h2>Owners</h2>
+      <p>Who a device belongs to. Access itself is granted by tag, never by person —
+        ownership decides who can remove or re-authorise a node. On the map a device
+        owned by someone else carries a solid outer ring, one owned by its tag a
+        dashed one; unmarked nodes belong to the tailnet owner.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Owner</th><th>Role</th><th>Online</th><th>Sites</th><th>Devices</th></tr></thead>
+      <tbody id="tb-users">__USER_ROWS__</tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="sec"><span class="idx">05</span><h2>How placement works</h2>
+      <p>Nothing here is hand-assigned — every device is re-located on each refresh.</p></div>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Step</th><th>Rule</th><th>Why</th></tr></thead>
+      <tbody>__RULE_ROWS__</tbody>
+    </table></div>
+    <p class="note" style="margin:12px 2px 0">__RULE_NOTE__</p>
+  </section>
+
+  <div class="foot">
+    <span>Built live from the Tailscale API · background refresh every <code>__REFRESH__</code></span>
+    <span>While this page is open it polls every <code>10s</code>, for up to <code>5 min</code> of viewing time</span>
+    <span>Read-only · status at <code>/healthz</code></span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var NODES = __NODES__, EDGES = __EDGES__, SITES = __SITES__;
+  var cv = document.getElementById('cv'), stage = document.getElementById('stage');
+  var tip = document.getElementById('tip'), legendEl = document.getElementById('legend');
+  var ctx = cv.getContext('2d');
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var W = 0, H = 0, dpr = 1, hover = null, pinned = null, hidden = {};
+  var byId = {}; NODES.forEach(function (n) { byId[n.id] = n; });
+
+  function cssv(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  var C = {};
+  function readColors() {
+    C.role = { server: cssv('--h-server'), exit: cssv('--h-exit'), subnet: cssv('--h-subnet'),
+               full: cssv('--h-full'), client: cssv('--h-client'), home: cssv('--h-home'),
+               proxy: cssv('--h-proxy') };
+    C.kind = { full: cssv('--h-full'), ha: cssv('--h-proxy'), peer: cssv('--accent-2'),
+               net: cssv('--h-subnet') };
+    C.ink = cssv('--ink'); C.muted = cssv('--muted'); C.faint = cssv('--faint');
+    C.line = cssv('--line-2'); C.surf = cssv('--surface-2'); C.accent = cssv('--accent');
+  }
+  readColors();
+
+  /* How many nodes go on which ring inside a region.
+
+     Split by CIRCUMFERENCE, not evenly: an outer ring has far more room than
+     an inner one, so an even split crowds the inside and long names collide
+     there. A third ring appears once a single region gets really dense — a
+     Docker host with twenty-odd containers is the realistic case. */
+  function ringPlan(n) {
+    if (n <= 7) return [{ n: n, r: 0.86 }];
+    if (n <= 16) {
+      var o = Math.max(3, Math.round(n * 0.65));
+      return [{ n: o, r: 0.86 }, { n: n - o, r: 0.50 }];
+    }
+    var a = Math.round(n * 0.45), b = Math.round(n * 0.33);
+    return [{ n: a, r: 0.86 }, { n: b, r: 0.60 }, { n: n - a - b, r: 0.32 }];
+  }
+
+  function place() {
+    var pad = Math.min(W, H) * 0.05;
+    SITES.forEach(function (s) {
+      s.cx = pad + s.fx * (W - pad * 2);
+      s.cy = pad + s.fy * (H - pad * 2);
+      s.r = Math.min(W, H) * s.fr;
+    });
+    // Fit the regions to the canvas, in both directions. Radii come from
+    // device counts alone, so without this a phone-sized canvas gets circles
+    // scaled for a desktop — and a tailnet that lives in ONE region gets a
+    // small circle with 20 labels crammed into it while half the frame stays
+    // empty. Narrow screens get a tighter budget: labels need proportionally
+    // more room there.
+    var narrow = W < 620;
+    var want = SITES.reduce(function (a, s) { return a + Math.PI * s.r * s.r; }, 0);
+    var budget = W * H * (narrow ? 0.22 : 0.32);
+    // clamped so one lonely region cannot balloon, and never past the frame
+    var fit = Math.min(1.55, Math.max(0.6, Math.sqrt(budget / Math.max(1, want))));
+    var rMax = Math.min(W - 2 * 6, H - 66 - 6) / 2 - 4;
+    SITES.forEach(function (s) { s.r = Math.min(s.r * fit, rMax); });
+
+    // On a phone the canvas is tall and narrow, so side-by-side regions leave
+    // no room for the captions — they end up printed over their neighbours.
+    // Stack the regions in one column instead, keeping their north-to-south
+    // order, and let the relaxation below fine-tune the spacing.
+    if (narrow) {
+      var col = SITES.slice().sort(function (a, b) { return a.fy - b.fy; });
+      // Grow the circles to use the free width, but only as far as the column
+      // still fits vertically once captions and gaps are accounted for.
+      var room = H - 44 - 6 - 52 * (col.length - 1);
+      var stack = col.reduce(function (a, s) { return a + 2 * s.r; }, 0);
+      var grow = Math.min(room / stack, (W / 2 - 14) / Math.max.apply(null,
+                          col.map(function (s) { return s.r; })));
+      col.forEach(function (s) { s.r *= grow; });
+      var yy = 44;
+      col.forEach(function (s) { s.cx = W / 2; s.cy = yy + s.r; yy += 2 * s.r + 52; });
+    }
+
+    // fx/fy are only a STARTING arrangement. Devices move between sites as
+    // their LAN address changes, so a cluster that is tiny today can be the
+    // biggest one tomorrow — with fixed centres its circle would then run off
+    // the canvas and cut through its neighbour. Relax the layout instead:
+    // push overlapping circles apart, then pull everything back inside the
+    // frame, repeatedly. Order matters — the clamp runs last so staying in
+    // view always wins over the separation.
+    // Stacked regions need a wider gap than side-by-side ones: the two caption
+    // lines of the lower region live in the space between them.
+    // TOP is the clearance above a circle. On wide screens the timestamp and
+    // the hint sit in the canvas' top row, so captions must start below them;
+    // on narrow ones both live outside the map and only the caption needs room.
+    var GAP = narrow ? 52 : 22, EDGE = 6, TOP = narrow ? 44 : 66;
+    for (var it = 0; it < 60; it++) {
+      for (var i = 0; i < SITES.length; i++) {
+        for (var j = i + 1; j < SITES.length; j++) {
+          var a = SITES[i], b = SITES[j];
+          var dx = b.cx - a.cx, dy = b.cy - a.cy;
+          var d = Math.hypot(dx, dy) || 0.01, need = a.r + b.r + GAP;
+          if (d >= need) continue;
+          var push = (need - d) / 2, ux = dx / d, uy = dy / d;
+          a.cx -= ux * push; a.cy -= uy * push;
+          b.cx += ux * push; b.cy += uy * push;
+        }
+      }
+      SITES.forEach(function (s) {
+        s.cx = Math.min(Math.max(s.cx, s.r + EDGE), W - s.r - EDGE);
+        // extra room on top: the two caption lines live above each circle and
+        // the timestamp is pinned to the top-left corner of the canvas
+        s.cy = Math.min(Math.max(s.cy, s.r + TOP), H - s.r - EDGE);
+      });
+    }
+    var per = {};
+    NODES.forEach(function (n) { (per[n.site] = per[n.site] || []).push(n); });
+    SITES.forEach(function (s) {
+      var list = per[s.id] || [];
+      var w = { home: 0, server: 1, exit: 2, subnet: 2, proxy: 3, full: 4, client: 5 };
+      list.sort(function (a, b) { return (w[a.role] - w[b.role]) || a.name.localeCompare(b.name); });
+      var n = list.length;
+      var plan = ringPlan(n), ring = 0, base = 0;
+      list.forEach(function (nd, i) {
+        if (n === 1) { nd.hx = s.cx; nd.hy = s.cy; nd.lab = 1; return; }
+        while (i >= base + plan[ring].n) { base += plan[ring].n; ring++; }
+        var idx = i - base, cnt = plan[ring].n;
+        var rad = s.r * plan[ring].r;
+        // Few nodes read better spread left/right (labels sit below the dot),
+        // more nodes start at the top like a clock face.
+        var start = cnt <= 3 ? 0 : -Math.PI / 2;
+        // Offset every inner ring by HALF a slot so its nodes sit in the gaps
+        // of the one outside it rather than lining up radially behind them — a
+        // fixed offset did not scale with the node count and still let long
+        // names collide in crowded sites.
+        var a = (idx / cnt) * Math.PI * 2 + start + (ring ? Math.PI / cnt : 0);
+        nd.hx = s.cx + Math.cos(a) * rad;
+        nd.hy = s.cy + Math.sin(a) * rad * 0.88;
+        // Labels point away from the cluster centre: nodes in the upper half
+        // get their name above the dot. Keeps names apart in dense sites.
+        // Excluded is the narrow band at the very top — a name placed there
+        // runs straight into the site caption sitting above the circle.
+        nd.lab = (Math.sin(a) < -0.15 && Math.abs(Math.cos(a)) > 0.38) ? -1 : 1;
+      });
+    });
+    NODES.forEach(function (n) {
+      if (n.x === undefined) { n.x = n.hx; n.y = n.hy; n.ph = Math.random() * 6.28; }
+    });
+  }
+
+  function resize() {
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width; H = r.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    place();
+  }
+
+  function nodeAt(mx, my) {
+    var best = null, bd = 24;
+    NODES.forEach(function (n) {
+      if (hidden[n.role]) return;
+      var d = Math.hypot(n.x - mx, n.y - my);
+      if (d < bd) { bd = d; best = n; }
+    });
+    return best;
+  }
+  stage.addEventListener('mousemove', function (e) {
+    var r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    var n = nodeAt(mx, my);
+    if (n !== hover) { hover = n; showTip(n, mx, my); } else if (n) { moveTip(mx, my); }
+    stage.style.cursor = n ? 'pointer' : 'default';
+  });
+  stage.addEventListener('mouseleave', function () { hover = null; showTip(null); });
+  stage.addEventListener('click', function (e) {
+    var r = cv.getBoundingClientRect();
+    var n = nodeAt(e.clientX - r.left, e.clientY - r.top);
+    pinned = (pinned && n && pinned.id === n.id) ? null : n;
+  });
+
+  function moveTip(mx, my) {
+    var w = tip.offsetWidth || 210, h = tip.offsetHeight || 130;
+    tip.style.left = Math.min(Math.max(10, mx + 16), Math.max(10, W - w - 10)) + 'px';
+    tip.style.top = Math.min(Math.max(10, my + 14), Math.max(10, H - h - 10)) + 'px';
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+  }
+  function row(k, v) { return '<div class="r"><span>' + k + '</span><b>' + esc(v) + '</b></div>'; }
+  function showTip(n, mx, my) {
+    if (!n) { tip.classList.remove('on'); return; }
+    var out = 0, inc = 0;
+    EDGES.forEach(function (e) { if (e.a === n.id) out++; else if (e.b === n.id) inc++; });
+    var tags = (n.tags || []).map(function (t) {
+      var k = t.replace('tag:', '');
+      return '<span class="chip ' + (k === 'client-full' ? 'full' : k) + '">' + k + '</span>';
+    }).join('');
+    tip.innerHTML =
+      '<h4><span style="width:9px;height:9px;border-radius:50%;background:' +
+        (C.role[n.role] || C.muted) + ';display:inline-block"></span>' + esc(n.name) +
+        (n.online ? '' : ' <span class="off">offline</span>') + '</h4>' +
+      row('site', n.siteLabel) + row('tailscale', n.ip) +
+      // routers serve their own LANs; what places them is the uplink they got
+      row(n.lanKind === 'uplink' ? 'uplink' : 'local', n.lan) +
+      row('os', n.os) +
+      row('owner', n.ownerKind === 'tag' ? 'tag-owned (auth key)' : n.owner) +
+      (n.routes && n.routes.length ? row('routes', n.routes.join(' ')) : '') +
+      row('reaches', out) + row('reached by', inc) +
+      (tags ? '<div class="tags">' + tags + '</div>' : '');
+    tip.classList.add('on'); moveTip(mx, my);
+  }
+
+  function buildLegend() {
+    var roles = {};
+    NODES.forEach(function (n) { roles[n.role] = (roles[n.role] || 0) + 1; });
+    legendEl.innerHTML = Object.keys(roles).sort().map(function (r) {
+      return '<span class="lg' + (hidden[r] ? ' off' : '') + '" data-r="' + r + '">' +
+        '<i style="background:' + (C.role[r] || C.muted) + '"></i>' + r +
+        ' <span style="opacity:.55">' + roles[r] + '</span></span>';
+    }).join('');
+    [].forEach.call(legendEl.children, function (el) {
+      el.onclick = function () {
+        var r = el.getAttribute('data-r'); hidden[r] = !hidden[r];
+        if (hover && hidden[hover.role]) { hover = null; showTip(null); }
+        if (pinned && hidden[pinned.role]) pinned = null;
+        buildLegend();
+      };
+    });
+  }
+
+  function quad(x0, y0, cx, cy, x1, y1, t) {
+    var u = 1 - t;
+    return { x: u * u * x0 + 2 * u * t * cx + t * t * x1,
+             y: u * u * y0 + 2 * u * t * cy + t * t * y1 };
+  }
+  function focusId() { var f = pinned || hover; return f ? f.id : null; }
+
+  function drawSite(s, t) {
+    var br = reduce ? 0 : Math.sin(t * 0.0004 + s.ph) * 3;
+    var R = s.r + br;
+    var x = s.cx + s.dx, y = s.cy + s.dy;
+    var tint = s.tint || '127,150,200';
+
+    // filled halo — each site has its own tint so the regions read as places
+    var g = ctx.createRadialGradient(x, y, R * .15, x, y, R);
+    g.addColorStop(0, 'rgba(' + tint + ',.13)');
+    g.addColorStop(.72, 'rgba(' + tint + ',.05)');
+    g.addColorStop(1, 'rgba(' + tint + ',0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+
+    // rim: a solid soft ring plus a slowly rotating dashed one on top
+    ctx.strokeStyle = 'rgba(' + tint + ',.30)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.stroke();
+    ctx.save();
+    ctx.translate(x, y);
+    if (!reduce) ctx.rotate((t * 0.00004 + s.ph) % 6.283);
+    ctx.setLineDash([5, 9]);
+    ctx.strokeStyle = 'rgba(' + tint + ',.55)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Caption above the circle, but flipped underneath when the circle sits
+    // too close to the top edge, and pulled horizontally so it cannot run off
+    // the side — both happen constantly on a phone-width canvas.
+    ctx.textAlign = 'center';
+    ctx.font = '600 10.5px ' + cssv('--mono');
+    var cap = s.label.toUpperCase();
+    var lx = clampText(x, Math.max(ctx.measureText(cap).width, 78));
+    var above = y - R - 34 > 4;
+    ctx.fillStyle = 'rgba(' + tint + ',.85)';
+    ctx.fillText(cap, lx, above ? y - R - 26 : y + R + 20);
+    ctx.fillStyle = C.faint;
+    ctx.font = '9px ' + cssv('--mono');
+    ctx.fillText(s.net, clampText(x, ctx.measureText(s.net).width),
+                 above ? y - R - 14 : y + R + 32);
+  }
+
+  /* Keep a centred text box inside the canvas. */
+  function clampText(x, w) {
+    return Math.min(Math.max(x, w / 2 + 5), W - w / 2 - 5);
+  }
+
+  function drawEdge(e, t) {
+    var a = byId[e.a], b = byId[e.b];
+    if (!a || !b || hidden[a.role] || hidden[b.role]) return;
+    var f = focusId(), lit = f && (e.a === f || e.b === f);
+    var col = C.kind[e.kind] || C.accent;
+    ctx.globalAlpha = f ? (lit ? .5 : .035) : (e.faint ? .08 : .17);
+    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    var lift = Math.min(80, Math.hypot(b.x - a.x, b.y - a.y) * .18);
+    var cx = mx, cy = my - lift;
+    ctx.strokeStyle = col; ctx.lineWidth = lit ? 1.6 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(cx, cy, b.x, b.y); ctx.stroke();
+    if (reduce) { ctx.globalAlpha = 1; return; }
+    var cnt = lit ? 3 : 1;
+    for (var i = 0; i < cnt; i++) {
+      var p = ((t * (lit ? .00034 : .0002)) + e.off + i / cnt) % 1;
+      var q = quad(a.x, a.y, cx, cy, b.x, b.y, p);
+      ctx.globalAlpha = (lit ? .95 : .4) * Math.sin(p * Math.PI);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(q.x, q.y, lit ? 2.6 : 1.7, 0, 7); ctx.fill();
+      if (e.bidir) {
+        var q2 = quad(b.x, b.y, cx, cy, a.x, a.y, p);
+        ctx.beginPath(); ctx.arc(q2.x, q2.y, lit ? 2.6 : 1.7, 0, 7); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawNode(n, t) {
+    var f = focusId();
+    var linked = f && EDGES.some(function (e) {
+      return (e.a === f && e.b === n.id) || (e.b === f && e.a === n.id); });
+    var dim = f && f !== n.id && !linked;
+    var col = C.role[n.role] || C.muted;
+    var r = n.role === 'home' ? 9 : (n.role === 'server' ? 6.5 : 6);
+    if (f === n.id) r += 2;
+    var pulse = reduce ? .5 : (Math.sin(t * .0021 + n.ph) * .5 + .5);
+    ctx.globalAlpha = dim ? .2 : 1;
+    if (!dim) {
+      var g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 4.2);
+      g.addColorStop(0, col + (n.online ? '55' : '20'));
+      g.addColorStop(1, col + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(n.x, n.y, r * 4.2, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r + (n.online ? pulse * .8 : 0), 0, 7); ctx.fill();
+    if (!n.online) {
+      ctx.fillStyle = C.surf;
+      ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(1, r - 2.4), 0, 7); ctx.fill();
+    }
+    if (f === n.id) {
+      ctx.strokeStyle = col; ctx.globalAlpha = .45 + pulse * .3; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 7 + pulse * 3, 0, 7); ctx.stroke();
+    }
+    // Ownership, quietly: a device belonging to another person gets a solid
+    // outer ring, one owned by its tag (joined on an auth key, no user at all)
+    // a dashed one. Everything unmarked is the tailnet owner's.
+    if (n.ownerKind && n.ownerKind !== 'self') {
+      ctx.save();
+      ctx.strokeStyle = C.muted; ctx.globalAlpha = dim ? .2 : .6; ctx.lineWidth = 1.1;
+      if (n.ownerKind === 'tag') ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 4.5, 0, 7); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.globalAlpha = dim ? .28 : 1;
+    ctx.fillStyle = (f === n.id) ? C.ink : C.muted;
+    ctx.font = (f === n.id ? '600 ' : '') + (W < 620 ? '9.5px ' : '10.5px ') + cssv('--sans');
+    ctx.textAlign = 'center';
+    ctx.fillText(n.name, clampText(n.x, ctx.measureText(n.name).width),
+                 n.y + (n.lab < 0 ? -(r + 8) : r + 13));
+    ctx.globalAlpha = 1;
+  }
+
+  function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    // whole regions drift slowly; their nodes ride along so a cluster never
+    // separates from its ring
+    SITES.forEach(function (s) {
+      s.dx = reduce ? 0 : Math.sin(t * .00017 + s.ph) * 9;
+      s.dy = reduce ? 0 : Math.cos(t * .00021 + s.ph * 1.3) * 7;
+    });
+    SITES.forEach(function (s) { drawSite(s, t); });
+    NODES.forEach(function (n) {
+      var d = reduce ? 0 : 1, s = siteOf[n.site];
+      var ox = s ? s.dx : 0, oy = s ? s.dy : 0;
+      n.x += ((n.hx + ox + Math.sin(t * .0003 + n.ph) * 3 * d) - n.x) * .06;
+      n.y += ((n.hy + oy + Math.cos(t * .00027 + n.ph) * 3 * d) - n.y) * .06;
+    });
+    EDGES.forEach(function (e) { drawEdge(e, t); });
+    NODES.forEach(function (n) { if (!hidden[n.role]) drawNode(n, t); });
+    requestAnimationFrame(frame);
+  }
+
+  EDGES.forEach(function (e, i) { e.off = (i * .137) % 1; });
+  var siteOf = {};
+  SITES.forEach(function (s, i) { s.ph = i * 1.7; s.dx = 0; s.dy = 0; siteOf[s.id] = s; });
+  new ResizeObserver(resize).observe(stage);
+  resize(); buildLegend();
+  requestAnimationFrame(frame);
+  /* ---- live updates -------------------------------------------------
+     The page polls a data-only endpoint while you are looking at it. The
+     server coalesces those polls, so more open tabs do not mean more calls
+     to Tailscale. Polling stops after LIVE_BUDGET of *visible* time — a tab
+     left open for hours must not keep asking forever. */
+  var LIVE_EVERY = 10000, LIVE_BUDGET = 300000;
+  var liveEl = document.getElementById('live'), stampEl = document.getElementById('stamp');
+  var liveSpent = 0, liveTimer = null, liveLast = 0, liveStop = false;
+
+  function setLive(txt, cls) {
+    if (!liveEl) return;
+    liveEl.textContent = txt;
+    liveEl.className = 'live' + (cls ? ' ' + cls : '');
+  }
+
+  function apply(s) {
+    // Keep the drawing state of nodes that still exist so the map does not
+    // jump on every poll; brand-new ones start at their target position.
+    var prev = {};
+    NODES.forEach(function (n) { prev[n.id] = n; });
+    NODES.length = 0;
+    s.nodes.forEach(function (n) {
+      var o = prev[n.id];
+      if (o) { n.x = o.x; n.y = o.y; n.ph = o.ph; }
+      NODES.push(n);
+    });
+    byId = {}; NODES.forEach(function (n) { byId[n.id] = n; });
+
+    var ph = {};
+    SITES.forEach(function (x) { ph[x.id] = x; });
+    SITES.length = 0;
+    s.sites.forEach(function (x, i) {
+      var o = ph[x.id];
+      x.ph = o ? o.ph : i * 1.7; x.dx = o ? o.dx : 0; x.dy = o ? o.dy : 0;
+      SITES.push(x); siteOf[x.id] = x;
+    });
+    Object.keys(siteOf).forEach(function (k) {
+      if (!s.sites.some(function (x) { return x.id === k; })) delete siteOf[k];
+    });
+
+    EDGES.length = 0; s.edges.forEach(function (e) { EDGES.push(e); });
+
+    // a pinned or hovered node may have vanished between polls
+    if (pinned) pinned = byId[pinned.id] || null;
+    if (hover) hover = byId[hover.id] || null;
+    if (!hover && !pinned) showTip(null);
+
+    var put = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    put('k-devices', s.kpi.devices); put('k-online', s.kpi.online);
+    put('k-grants', s.kpi.grants); put('k-sites', s.kpi.sites);
+    put('k-users', (s.users || []).length);
+    // Only touch a table when its content actually changed — replacing
+    // innerHTML every 10s would drop any text selection and reset how far the
+    // user had scrolled the panel sideways.
+    var body = function (id, h) {
+      var el = document.getElementById(id);
+      if (el && el.innerHTML !== h) el.innerHTML = h;
+    };
+    body('tb-devices', s.rows.devices); body('tb-grants', s.rows.grants);
+    body('tb-sites', s.rows.sites); body('tb-users', s.rows.users);
+    if (stampEl) stampEl.textContent = 'atlas.live · ' + s.stamp;
+
+    place(); buildLegend();
+  }
+
+  function poll() {
+    fetch('api/state', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (s) {
+        if (s.error) { setLive('· stale (' + s.error + ')', 'warn'); return; }
+        apply(s);
+        setLive('· live');
+      })
+      .catch(function (e) { setLive('· offline (' + e + ')', 'warn'); });
+  }
+
+  function tick() {
+    if (liveStop) return;
+    var now = Date.now();
+    liveSpent += now - liveLast; liveLast = now;
+    if (liveSpent >= LIVE_BUDGET) { pauseLive(true); return; }
+    poll();
+  }
+
+  function startLive() {
+    if (liveTimer || liveStop) return;
+    liveLast = Date.now();
+    liveTimer = setInterval(tick, LIVE_EVERY);
+    setLive('· live');
+  }
+
+  function pauseLive(spent) {
+    if (liveTimer) { liveSpent += Date.now() - liveLast; clearInterval(liveTimer); liveTimer = null; }
+    if (spent) { liveStop = true; setLive('· paused — reload for live', 'idle'); }
+  }
+
+  // Only count time the page is actually being looked at, and never poll from
+  // a backgrounded tab.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) pauseLive(false);
+    else if (!liveStop) { startLive(); poll(); }
+  });
+  if (!document.hidden) { startLive(); poll(); }
+
+  new MutationObserver(function () { readColors(); buildLegend(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  // The CSS follows the system scheme on its own, but the canvas colours are
+  // read once into C — without this the map keeps its old palette when the
+  // phone flips to dark at sunset while the page is open.
+  var scheme = matchMedia('(prefers-color-scheme: dark)');
+  (scheme.addEventListener ? scheme.addEventListener.bind(scheme, 'change')
+                           : scheme.addListener.bind(scheme))(
+    function () { readColors(); buildLegend(); });
+})();
+</script>

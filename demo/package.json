@@ -1,0 +1,15 @@
+{
+  "name": "tailnet-atlas-demo",
+  "private": true,
+  "description": "Records the fake-data demo page as a GIF",
+  "scripts": {
+    "record": "node record.js",
+    "verify": "DUMP=1 node record.js && node verify.js"
+  },
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "omggif": "^1.0.10",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^25.4.0"
+  }
+}

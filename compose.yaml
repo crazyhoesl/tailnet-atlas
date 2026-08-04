@@ -1,0 +1,75 @@
+# Tailnet Atlas — a live map of who can reach what in your tailnet.
+#
+# The app never listens on a public interface: it binds 127.0.0.1 inside the
+# Tailscale sidecar's network namespace, and the only way in is `tailscale
+# serve` (see serve.json — Funnel is explicitly off). Reachable at
+# https://<TS_HOSTNAME>.<your-tailnet>.ts.net once the node is up.
+services:
+  ts-tailnet:
+    image: tailscale/tailscale:latest
+    container_name: tailnet-tailscale
+    hostname: ${TS_HOSTNAME:-tailnet-atlas}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-tailnet-atlas}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "false"
+    volumes:
+      - ./data/tailscale:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add: [net_admin, sys_module]
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+      - "com.centurylinklabs.watchtower.enable=false"
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --peers=false >/dev/null 2>&1 && nslookup one.one.one.one >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build: ./app
+    container_name: tailnet-app
+    network_mode: service:ts-tailnet
+    depends_on:
+      ts-tailnet:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-UTC}
+      REFRESH_SECONDS: "300"
+      TS_OAUTH_CLIENT_ID: ${TS_OAUTH_CLIENT_ID:-}
+      TS_OAUTH_SECRET: ${TS_OAUTH_SECRET:-}
+    volumes:
+      # mounted, not baked in: editing sites should not need an image rebuild
+      - ./config.toml:/app/config.toml:ro
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+      - "com.centurylinklabs.watchtower.enable=false"
+    # the interpreter is "python" on the slim image, not "python3" — getting
+    # this wrong makes the container permanently unhealthy, and with autoheal
+    # watching it that turns into a restart loop
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=5)\" >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 8s
+      retries: 4
+      start_period: 40s
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: tailnet-autoheal
+    restart: unless-stopped
+    labels: ["com.centurylinklabs.watchtower.enable=false"]
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "15"
+      AUTOHEAL_START_PERIOD: "60"
+      DOCKER_SOCK: /var/run/docker.sock
+      CURL_TIMEOUT: "30"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -1,0 +1,43 @@
+# Config for the fictional tailnet used by make_demo.py.
+# Same format as config.example.toml — this doubles as a worked example.
+
+tailnet = "orion · tin-otter.ts.net"
+
+# a cloud VM: its datacenter address places it nowhere useful
+pinned_roaming = ["cloud-exit"]
+
+[[site]]
+id    = "lisbon"
+label = "Lisbon · home"
+net   = "192.168.10.0/24"
+match = "192.168.10."
+fx    = 0.19
+fy    = 0.28
+tint  = "255,209,102"
+
+[[site]]
+id    = "berlin"
+label = "Berlin · office"
+net   = "10.20.30.0/24"
+match = "10.20.30."
+fx    = 0.54
+fy    = 0.11
+tint  = "178,139,250"
+
+# claims the phone-hotspot range before the built-in container rule sees it
+[[site]]
+id    = "mobile"
+label = "Mobile · roaming"
+net   = "phones · travel routers"
+match = "172.20.10."
+fx    = 0.42
+fy    = 0.78
+tint  = "45,212,191"
+
+[[site]]
+id    = "dock"
+label = "Docker @ crate"
+net   = "172.16/12 bridges"
+fx    = 0.78
+fy    = 0.46
+tint  = "91,140,240"

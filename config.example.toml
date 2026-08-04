@@ -1,0 +1,70 @@
+# Tailnet Atlas — everything specific to your setup lives here.
+# Copy to config.toml and edit. config.toml is gitignored.
+
+# Shown in the browser title and the brand line above the map.
+tailnet = "example · tin-otter.ts.net"
+
+# Devices that always count as roaming, whatever address they report.
+# Typical case: a cloud VM used as an exit node. It has no LAN that would
+# place it anywhere meaningful, and its datacenter address would otherwise
+# drag it into whichever bucket happens to match.
+pinned_roaming = ["cloud-exit"]
+
+
+# ---------------------------------------------------------------------------
+# Sites. One [[site]] block per place. Order matters twice:
+#   * `match` rules are tried top to bottom, first hit wins
+#   * the order decides the single-column stacking on narrow screens
+#
+# Two ids are reserved and must exist:
+#   dock    — receives whatever is left inside 172.16/12 (container bridges)
+#   mobile  — the fallback for anything that matched nothing
+#
+# `match` is a plain address prefix, not a CIDR. Only put PLACE-BOUND networks
+# here. A travel router hands out its own LAN and carries it everywhere, so
+# that network says nothing about where the device is — leave it out and let
+# the uplink decide (see README).
+#
+# fx/fy are a starting position in the frame (0..1). They are only a hint: the
+# layout pushes overlapping regions apart and keeps them inside the canvas, so
+# you do not have to get them exactly right.
+# tint is "r,g,b" and colours the region's halo, rim and caption.
+# ---------------------------------------------------------------------------
+
+[[site]]
+id    = "home"
+label = "Home"
+net   = "192.168.1.0/24"
+match = "192.168.1."
+fx    = 0.19
+fy    = 0.28
+tint  = "255,209,102"
+
+[[site]]
+id    = "office"
+label = "Office"
+net   = "10.20.30.0/24"
+match = "10.20.30."
+fx    = 0.54
+fy    = 0.11
+tint  = "178,139,250"
+
+# A phone hotspot hands out 172.20.10.x, which sits INSIDE 172.16/12 and would
+# otherwise be read as a container bridge. Claiming it here, before the
+# built-in Docker rule runs, is the whole point of rule order.
+[[site]]
+id    = "mobile"
+label = "Mobile · roaming"
+net   = "phones · travel routers"
+match = "172.20.10."
+fx    = 0.42
+fy    = 0.78
+tint  = "45,212,191"
+
+[[site]]
+id    = "dock"
+label = "Docker"
+net   = "172.16/12 bridges"
+fx    = 0.78
+fy    = 0.46
+tint  = "91,140,240"

@@ -1,0 +1,14 @@
+# secrets and per-install config
+.env
+config.toml
+
+# tailscale node state
+data/
+
+# demo build output and recorder deps
+demo/out/
+demo/node_modules/
+demo/package-lock.json
+
+__pycache__/
+*.pyc
