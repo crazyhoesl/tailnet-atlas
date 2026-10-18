@@ -129,6 +129,13 @@ def main() -> None:
     render.fetch_users = lambda: USERS
 
     data = render.build()
+    # No click-through in the demo. The page probes https://<fqdn>/ from the
+    # visitor's browser to find devices with a web UI, and *.ts.net names are
+    # REAL tailnet domains — an invented one may well belong to someone. Every
+    # visitor of the public page would otherwise fire requests at a stranger's
+    # tailnet. Without fqdn the probe skips the node.
+    for n in data["nodes"]:
+        n.pop("fqdn", None)
     page = render.render_html(data)
 
     OUT.mkdir(exist_ok=True)

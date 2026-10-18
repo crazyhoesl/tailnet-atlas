@@ -31,6 +31,12 @@ can regenerate it yourself, see [Demo](#demo).*
   advertised routes, tags, and how many nodes it reaches / is reached by.
 * **Click to pin** and everything unrelated dims — the view worth having open
   while you are about to change a grant.
+* **Devices with a web UI open on click.** A node that answers on 443 gets a
+  ` ↗` and opens `https://<its MagicDNS name>/` in a new tab instead of
+  pinning. The check runs in *your* browser, not on the server: the Atlas
+  node itself usually may not reach other devices, and what matters is
+  whether the person looking can open the page. Off in the demo, because
+  invented `*.ts.net` names may belong to a real tailnet.
 * **The legend doubles as a role filter.**
 * Tables below the map for devices, grants, sites and owners, plus one that
   documents the placement rules. That table is generated from the same
