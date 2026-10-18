@@ -164,7 +164,7 @@
   <div class="stagewrap">
     <div class="stage" id="stage">
       <canvas id="cv"></canvas>
-      <div class="hint">hover a node · click to pin · click a role to filter</div>
+      <div class="hint">hover a node · click to open ↗ or pin · click a role to filter</div>
       <div class="tip" id="tip"></div>
     </div>
     <!-- outside .stage so they can drop below the map on narrow screens instead
@@ -269,7 +269,10 @@
     return [{ n: a, r: 0.86 }, { n: b, r: 0.60 }, { n: n - a - b, r: 0.32 }];
   }
 
+  var laidOut = false;
   function place() {
+    if (!(W > 0 && H > 0)) return;
+    laidOut = true;
     var pad = Math.min(W, H) * 0.05;
     SITES.forEach(function (s) {
       s.cx = pad + s.fx * (W - pad * 2);
@@ -376,6 +379,12 @@
 
   function resize() {
     var r = stage.getBoundingClientRect();
+    // A stage without size (background tab, minimised window, a layout pass
+    // before the page is painted) would feed W = 0 into place(), whose narrow
+    // branch then divides by zero and turns every radius into NaN — the next
+    // frame threw in createRadialGradient and the map froze for good. Keep
+    // the last good layout instead; the next real resize lays out again.
+    if (!(r.width > 0 && r.height > 0)) return;
     dpr = Math.min(2, window.devicePixelRatio || 1);
     W = r.width; H = r.height;
     cv.width = W * dpr; cv.height = H * dpr;
@@ -402,8 +411,32 @@
   stage.addEventListener('click', function (e) {
     var r = cv.getBoundingClientRect();
     var n = nodeAt(e.clientX - r.left, e.clientY - r.top);
+    // A device that answers on 443 opens its page; everything else keeps the
+    // old behaviour and pins.
+    if (n && web[n.id]) { window.open(web[n.id], '_blank', 'noopener'); return; }
     pinned = (pinned && n && pinned.id === n.id) ? null : n;
   });
+
+  /* ---- which devices serve a web page? --------------------------------
+     Probed from the VIEWER's browser, not from the server: the atlas node
+     may not reach other devices at all (its ACL is narrower than a person's),
+     and the question that matters is whether the one looking at the map can
+     open the page. A no-cors request cannot read the answer, but it only
+     resolves when DNS, TCP 443, TLS and an HTTP reply all worked — which is
+     exactly "reachable on 443". Re-checked every five minutes. */
+  var web = {}, probing = {};
+  function probe(n) {
+    if (!n.fqdn || !n.online || probing[n.id] || n.fqdn === location.hostname) return;
+    probing[n.id] = true;
+    var ctl = window.AbortController ? new AbortController() : null;
+    var to = setTimeout(function () { if (ctl) ctl.abort(); }, 4000);
+    fetch('https://' + n.fqdn + '/', { mode: 'no-cors', cache: 'no-store',
+                                       signal: ctl ? ctl.signal : undefined })
+      .then(function () { web[n.id] = 'https://' + n.fqdn + '/'; },
+            function () { delete web[n.id]; })
+      .then(function () { clearTimeout(to); });
+  }
+  function probeAll() { probing = {}; NODES.forEach(probe); }
 
   function moveTip(mx, my) {
     var w = tip.offsetWidth || 210, h = tip.offsetHeight || 130;
@@ -434,6 +467,7 @@
       row('owner', n.ownerKind === 'tag' ? 'tag-owned (auth key)' : n.owner) +
       (n.routes && n.routes.length ? row('routes', n.routes.join(' ')) : '') +
       row('reaches', out) + row('reached by', inc) +
+      (web[n.id] ? '<div class="r"><span>web</span><b>click to open ↗</b></div>' : '') +
       (tags ? '<div class="tags">' + tags + '</div>' : '');
     tip.classList.add('on'); moveTip(mx, my);
   }
@@ -467,6 +501,7 @@
     var br = reduce ? 0 : Math.sin(t * 0.0004 + s.ph) * 3;
     var R = s.r + br;
     var x = s.cx + s.dx, y = s.cy + s.dy;
+    if (!(isFinite(R) && isFinite(x) && isFinite(y) && R > 0)) return;
     var tint = s.tint || '127,150,200';
 
     // filled halo — each site has its own tint so the regions read as places
@@ -521,16 +556,26 @@
     ctx.strokeStyle = col; ctx.lineWidth = lit ? 1.6 : 1;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(cx, cy, b.x, b.y); ctx.stroke();
     if (reduce) { ctx.globalAlpha = 1; return; }
-    var cnt = lit ? 3 : 1;
+    // Particles run source → target, which is the direction of the grant.
+    // Each one is a head plus a short fading tail behind it, so the direction
+    // reads even when the dot is small. Idle edges get two, a focused one
+    // three, faster and brighter.
+    var cnt = lit ? 3 : 2, rad = lit ? 2.8 : 2.2, peak = lit ? .95 : .7;
+    var speed = lit ? .00034 : .00022;
+    ctx.fillStyle = col;
     for (var i = 0; i < cnt; i++) {
-      var p = ((t * (lit ? .00034 : .0002)) + e.off + i / cnt) % 1;
-      var q = quad(a.x, a.y, cx, cy, b.x, b.y, p);
-      ctx.globalAlpha = (lit ? .95 : .4) * Math.sin(p * Math.PI);
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(q.x, q.y, lit ? 2.6 : 1.7, 0, 7); ctx.fill();
-      if (e.bidir) {
-        var q2 = quad(b.x, b.y, cx, cy, a.x, a.y, p);
-        ctx.beginPath(); ctx.arc(q2.x, q2.y, lit ? 2.6 : 1.7, 0, 7); ctx.fill();
+      var p = ((t * speed) + (e.off || 0) + i / cnt) % 1;
+      var fade = Math.sin(p * Math.PI);
+      dot(a.x, a.y, b.x, b.y, p, fade);
+      if (e.bidir) dot(b.x, b.y, a.x, a.y, p, fade);
+    }
+    function dot(x0, y0, x1, y1, p, fade) {
+      for (var k = 3; k >= 0; k--) {          // tail first, head last
+        var pp = p - k * .012;
+        if (pp < 0) continue;
+        var q = quad(x0, y0, cx, cy, x1, y1, pp);
+        ctx.globalAlpha = peak * fade * (k ? (.45 - k * .12) : 1);
+        ctx.beginPath(); ctx.arc(q.x, q.y, rad * (k ? (1 - k * .18) : 1), 0, 7); ctx.fill();
       }
     }
     ctx.globalAlpha = 1;
@@ -542,6 +587,7 @@
       return (e.a === f && e.b === n.id) || (e.b === f && e.a === n.id); });
     var dim = f && f !== n.id && !linked;
     var col = C.role[n.role] || C.muted;
+    if (!(isFinite(n.x) && isFinite(n.y))) return;
     var r = n.role === 'home' ? 9 : (n.role === 'server' ? 6.5 : 6);
     if (f === n.id) r += 2;
     var pulse = reduce ? .5 : (Math.sin(t * .0021 + n.ph) * .5 + .5);
@@ -576,12 +622,21 @@
     ctx.fillStyle = (f === n.id) ? C.ink : C.muted;
     ctx.font = (f === n.id ? '600 ' : '') + (W < 620 ? '9.5px ' : '10.5px ') + cssv('--sans');
     ctx.textAlign = 'center';
-    ctx.fillText(n.name, clampText(n.x, ctx.measureText(n.name).width),
+    var label = n.name + (web[n.id] ? ' ↗' : '');
+    ctx.fillText(label, clampText(n.x, ctx.measureText(label).width),
                  n.y + (n.lab < 0 ? -(r + 8) : r + 13));
     ctx.globalAlpha = 1;
   }
 
   function frame(t) {
+    // Ask for the next frame FIRST. If anything below throws, the loop keeps
+    // running; before, one bad frame stopped the animation permanently and
+    // without any visible error.
+    requestAnimationFrame(frame);
+    // Nothing to draw before the first real layout (page opened in a
+    // background tab, stage still 0×0): node targets do not exist yet, and
+    // easing towards "undefined" would park every node at NaN for good.
+    if (!(W > 0 && H > 0 && laidOut)) return;
     ctx.clearRect(0, 0, W, H);
     // whole regions drift slowly; their nodes ride along so a cluster never
     // separates from its ring
@@ -593,12 +648,12 @@
     NODES.forEach(function (n) {
       var d = reduce ? 0 : 1, s = siteOf[n.site];
       var ox = s ? s.dx : 0, oy = s ? s.dy : 0;
+      if (!(isFinite(n.x) && isFinite(n.y))) { n.x = n.hx; n.y = n.hy; }
       n.x += ((n.hx + ox + Math.sin(t * .0003 + n.ph) * 3 * d) - n.x) * .06;
       n.y += ((n.hy + oy + Math.cos(t * .00027 + n.ph) * 3 * d) - n.y) * .06;
     });
     EDGES.forEach(function (e) { drawEdge(e, t); });
     NODES.forEach(function (n) { if (!hidden[n.role]) drawNode(n, t); });
-    requestAnimationFrame(frame);
   }
 
   EDGES.forEach(function (e, i) { e.off = (i * .137) % 1; });
@@ -607,6 +662,7 @@
   new ResizeObserver(resize).observe(stage);
   resize(); buildLegend();
   requestAnimationFrame(frame);
+  probeAll(); setInterval(probeAll, 5 * 60 * 1000);
   /* ---- live updates -------------------------------------------------
      The page polls a data-only endpoint while you are looking at it. The
      server coalesces those polls, so more open tabs do not mean more calls
@@ -647,7 +703,19 @@
       if (!s.sites.some(function (x) { return x.id === k; })) delete siteOf[k];
     });
 
-    EDGES.length = 0; s.edges.forEach(function (e) { EDGES.push(e); });
+    // Fresh edge objects from the server carry no particle offset. Without
+    // one, every particle position becomes NaN and canvas silently draws
+    // nothing — all moving dots vanished on the first poll, a few seconds
+    // after load. Keep each edge's offset by source→target so they also
+    // do not jump.
+    var offs = {};
+    EDGES.forEach(function (e) { offs[e.a + '>' + e.b] = e.off; });
+    EDGES.length = 0;
+    s.edges.forEach(function (e, i) {
+      var k = offs[e.a + '>' + e.b];
+      e.off = (typeof k === 'number') ? k : (i * .137) % 1;
+      EDGES.push(e);
+    });
 
     // a pinned or hovered node may have vanished between polls
     if (pinned) pinned = byId[pinned.id] || null;
@@ -670,6 +738,7 @@
     if (stampEl) stampEl.textContent = 'atlas.live · ' + s.stamp;
 
     place(); buildLegend();
+    NODES.forEach(probe);   // only devices not checked in this round
   }
 
   function poll() {

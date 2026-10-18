@@ -246,6 +246,9 @@ def build_devices(devs: list) -> list[dict]:
         routes = [r for r in enabled if r not in ("0.0.0.0/0", "::/0")]
         out.append({
             "id": short_id(name, used), "name": name, "tags": tags,
+            # full MagicDNS name: the page probes https://<fqdn>/ from the
+            # viewer's browser to decide whether the node is clickable
+            "fqdn": (d.get("name") or "").rstrip("."),
             "ip": (d.get("addresses") or ["—"])[0],
             "lan": lan, "lanKind": "uplink" if is_wan else "lan", "site": site,
             # empty user = joined on a tagged auth key, owned by the tag.
@@ -543,7 +546,8 @@ def build() -> dict:
                 "lan": d["lan"], "lanKind": d["lanKind"],
                 "loc": d["site"], "os": d["os"], "owner": d["owner"],
                 "ownerKind": d["ownerKind"],
-                "tags": d["tags"], "routes": d["routes"], "online": d["online"]}
+                "tags": d["tags"], "routes": d["routes"], "online": d["online"],
+                "fqdn": d["fqdn"]}
                for d in devs]
 
     return {
